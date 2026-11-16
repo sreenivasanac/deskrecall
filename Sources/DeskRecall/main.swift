@@ -30,11 +30,21 @@ if args.contains("--selfcheck") {
 // `--dump`: what the app can see.
 if args.contains("--dump") {
     let spaces = Spaces.userSpaces()
+    Windows.debug = args.contains("--verbose")
     print("accessibility trusted:", Windows.trusted)
     for d in Displays.current() { print("display \(d.summary) key=\(d.hardwareKey) desktops=\(spaces[d.uuid] ?? [])") }
     for w in Windows.capture() {
         print("window \(w.id) [\(w.appName)] \"\(w.title.prefix(40))\" frame=\(w.frame.integral) spaces=\(w.spaces)")
     }
+    exit(0)
+}
+
+// `--store-key`: copy TYPESAFE_API_KEY from the environment into the keychain, owned by this app.
+//   open -W -n --env TYPESAFE_API_KEY=... -a DeskRecall --args --store-key
+if args.contains("--store-key") {
+    guard let key = ProcessInfo.processInfo.environment["TYPESAFE_API_KEY"], !key.isEmpty else { print("TYPESAFE_API_KEY is not set"); exit(1) }
+    Jev.apiKey = key
+    print("stored")
     exit(0)
 }
 

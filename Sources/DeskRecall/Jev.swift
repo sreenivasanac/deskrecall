@@ -13,9 +13,12 @@ enum Jev {
     }
     enum Failure: Error { case noKey, http(Int, String), malformed }
 
-    /// The user's TypeSafe API key, kept in the login keychain.
+    /// The user's TypeSafe API key, kept in the login keychain. The app must add the item itself
+    /// (menu, or `--store-key`): an item added by another tool makes macOS prompt on every read.
+    /// A TYPESAFE_API_KEY environment variable takes precedence, for command-line use.
     static var apiKey: String? {
         get {
+            if let env = ProcessInfo.processInfo.environment["TYPESAFE_API_KEY"], !env.isEmpty { return env }
             let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
                                         kSecAttrAccount as String: Config.keychainAccount, kSecReturnData as String: true]
             var out: CFTypeRef?

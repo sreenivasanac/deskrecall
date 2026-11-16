@@ -71,8 +71,16 @@ Accessibility belongs to the app bundle, so run commands through it:
 open -W -n -a DeskRecall --args --arrange --out /tmp/deskrecall.txt
 ```
 
-`--arrange [--profile NAME]`, `--save NAME`, `--dump` (displays, desktops and windows as the app
-sees them), `--selfcheck` (logic tests; runs straight from `.build/debug/DeskRecall`).
+`--arrange [--profile NAME]`, `--save NAME`, `--dump [--verbose]` (displays, desktops and windows as
+the app sees them), `--selfcheck` (logic tests; runs straight from `.build/debug/DeskRecall`).
+
+The Jev key can also come from a `TYPESAFE_API_KEY` environment variable, which wins over the
+keychain. To put a key in the keychain without the menu, let the app store it (an item added by
+another tool, such as `security`, makes macOS prompt on every read):
+
+```bash
+open -W -n --env TYPESAFE_API_KEY=your-key -a DeskRecall --args --store-key
+```
 
 ## Limits
 

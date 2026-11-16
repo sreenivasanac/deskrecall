@@ -20,6 +20,7 @@ enum Windows {
     private static let getWindow = dlsym(rtldDefault, "_AXUIElementGetWindow").map { unsafeBitCast($0, to: GetWindow.self) }
     private static let createWithToken = dlsym(rtldDefault, "_AXUIElementCreateWithRemoteToken").map { unsafeBitCast($0, to: CreateWithToken.self) }
 
+    static var debug = false    // `--dump --verbose` prints every window element and why it was kept or dropped
     static var trusted: Bool { AXIsProcessTrusted() }
     static func requestTrust() {
         _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
@@ -72,13 +73,16 @@ enum Windows {
             var seen = Set<CGWindowID>()
             for el in visible + elementsOnOtherSpaces(pid: pid) {
                 var id: CGWindowID = 0
-                guard let getWindow, getWindow(el, &id) == .success, id != 0, seen.insert(id).inserted,
-                      (attr(el, kAXSubroleAttribute) as String?) == kAXStandardWindowSubrole,
-                      (attr(el, kAXMinimizedAttribute) as Bool?) != true,
-                      (attr(el, "AXFullScreen") as Bool?) != true,
+                guard let getWindow, getWindow(el, &id) == .success, id != 0, seen.insert(id).inserted else { continue }
+                let subrole: String? = attr(el, kAXSubroleAttribute)
+                let minimized = (attr(el, kAXMinimizedAttribute) as Bool?) == true
+                let fullscreen = (attr(el, "AXFullScreen") as Bool?) == true
+                let spaces = Spaces.of(id)      // empty = not shown on any desktop (hidden helper windows)
+                if debug { print("  ax \(id) [\(app.localizedName ?? "")] subrole=\(subrole ?? "-") min=\(minimized) full=\(fullscreen) spaces=\(spaces)") }
+                guard subrole == kAXStandardWindowSubrole, !minimized, !fullscreen, !spaces.isEmpty,
                       let frame = frame(of: el) else { continue }
                 result.append(LiveWindow(element: el, id: id, bundleID: bundleID, appName: app.localizedName ?? bundleID,
-                                         title: attr(el, kAXTitleAttribute) ?? "", frame: frame, spaces: Spaces.of(id)))
+                                         title: attr(el, kAXTitleAttribute) ?? "", frame: frame, spaces: spaces))
             }
         }
         return result
