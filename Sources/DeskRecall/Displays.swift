@@ -14,9 +14,10 @@ struct DisplayInfo: Codable, Hashable {
 
     var bounds: CGRect { CGRect(x: x, y: y, width: width, height: height) }
 
-    /// Identity of the hardware, ignoring where it sits. Two profiles with equal sorted
-    /// hardware keys were saved on the same set of monitors.
-    var hardwareKey: String { "\(vendor)-\(model)-\(serial)-\(width)x\(height)-\(builtin ? "b" : "e")" }
+    /// Identity of the hardware, ignoring where it sits and which scaled resolution it runs at
+    /// (frames are stored as fractions, so a resolution change needs no new profile). Two profiles
+    /// with equal sorted hardware keys were saved on the same set of monitors.
+    var hardwareKey: String { "\(vendor)-\(model)-\(serial)-\(builtin ? "b" : "e")" }
 
     /// Everything Jev needs to compare monitors, as one line.
     var summary: String {

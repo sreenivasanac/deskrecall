@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="DeskRecall"                      # keep in sync with Config.swift
 BUNDLE_ID="com.sreenivasanac.deskrecall"
-VERSION="0.1.0"
+VERSION="0.2.0"
 INSTALL_DIR="${INSTALL_DIR:-/Applications}"
 
 # macOS ties the Accessibility grant to the code signature. A real identity (even a self-signed

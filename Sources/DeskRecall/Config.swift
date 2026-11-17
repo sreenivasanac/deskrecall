@@ -4,6 +4,7 @@ import Foundation
 enum Keys {
     static let autoArrange = "autoArrange"
     static let askWhenUnsure = "askWhenUnsure"
+    static let preferred = "preferredProfiles"      // display set key -> id of the profile last used there
 }
 
 /// Branding and tunables in one place.
@@ -25,6 +26,9 @@ enum Config {
     static let displayChangeSettle: TimeInterval = 4
     /// Frames within this many points of the target are left alone.
     static let frameTolerance: CGFloat = 4
+    /// The Dock animation has to finish before a restored window can be placed (nanoseconds).
+    static let minimizeSettle: UInt64 = 700_000_000
+    static let profilesWindowSize = CGSize(width: 900, height: 620)
 
     static var profilesURL: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

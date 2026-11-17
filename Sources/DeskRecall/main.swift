@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 // Command-line modes, for scripting and debugging. Accessibility is granted to the app bundle,
 // so run them through it:  open -W -n -a DeskRecall --args --arrange --out /tmp/log.txt
@@ -7,6 +8,7 @@ func value(after flag: String) -> String? {
     args.firstIndex(of: flag).flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
 }
 if let path = value(after: "--out") { freopen(path, "w", stdout) }
+UserDefaults.standard.register(defaults: [Keys.autoArrange: true, Keys.askWhenUnsure: true])    // both toggles start on
 
 // `--selfcheck`: the pure logic, no permissions or network needed.
 if args.contains("--selfcheck") {
@@ -23,6 +25,13 @@ if args.contains("--selfcheck") {
     let sample = #"{"model":"jev-1.14.0","answers":{"w1":{"type":"choice","choice":"s2","confidence":0.7,"probabilities":{"s1":0.2,"s2":0.8}},"close":{"type":"noul","noul":0.98}},"usage":{"input_tokens":1,"output_tokens":1}}"#
     let parsed = try Jev.parse(Data(sample.utf8))
     precondition(parsed["w1"]?.choice == "s2" && parsed["w1"]?.probabilities["s1"] == 0.2 && parsed["close"]?.yes == 0.98, "documented response shape parses")
+
+    // A profile written before minimized windows were recorded must still load (losing it would lose the user's layouts).
+    let old = #"{"bundleID":"b","appName":"a","title":"t","display":0,"space":2,"fx":0,"fy":0,"fw":1,"fh":1}"#
+    let window = try JSONDecoder().decode(SavedWindow.self, from: Data(old.utf8))
+    precondition(!window.isMinimized && window.space == 2, "old profiles decode, not minimized")
+    precondition(DisplayInfo(name: "T", vendor: 1, model: 2, serial: 3, builtin: false, uuid: "x", x: 0, y: 0, width: 2560, height: 1440).hardwareKey == display.hardwareKey,
+                 "a monitor is the same monitor at another resolution")
     print("selfcheck ok")
     exit(0)
 }
@@ -31,10 +40,10 @@ if args.contains("--selfcheck") {
 if args.contains("--dump") {
     let spaces = Spaces.userSpaces()
     Windows.debug = args.contains("--verbose")
-    print("accessibility trusted:", Windows.trusted)
+    print("accessibility trusted:", Windows.trusted, "visible desktops:", Spaces.visible().sorted())
     for d in Displays.current() { print("display \(d.summary) key=\(d.hardwareKey) desktops=\(spaces[d.uuid] ?? [])") }
     for w in Windows.capture() {
-        print("window \(w.id) [\(w.appName)] \"\(w.title.prefix(40))\" frame=\(w.frame.integral) spaces=\(w.spaces)")
+        print("window \(w.id) [\(w.appName)] \"\(w.title.prefix(40))\" frame=\(w.frame.integral) spaces=\(w.spaces)\(w.minimized ? " minimized" : "")")
     }
     exit(0)
 }
@@ -48,17 +57,56 @@ if args.contains("--store-key") {
     exit(0)
 }
 
-// `--move <windowID> <spaceID>`: move one window to a Space and report where it ended up.
-if let w = value(after: "--move").flatMap(CGWindowID.init), args.count > 3, let space = UInt64(args[args.firstIndex(of: "--move")! + 2]) {
-    print("before:", Spaces.of(w))
-    Spaces.move([w], to: space)
-    RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-    print("after:", Spaces.of(w))
+// `--move <windowID> <spaceID>` and `--minimize <windowID> <true|false>`: one low-level step on
+// one window, then where it ended up. For checking what a macOS release still allows.
+func report(_ id: CGWindowID) {
+    RunLoop.current.run(until: Date().addingTimeInterval(1))
+    let now = Windows.capture().first { $0.id == id }
+    print("after: spaces=\(Spaces.of(id)) minimized=\(now?.minimized ?? false) frame=\(now?.frame.integral ?? .zero) visible=\(Spaces.visible().sorted())")
     exit(0)
+}
+if let i = args.firstIndex(of: "--move"), args.count > i + 2, let id = CGWindowID(args[i + 1]), let space = UInt64(args[i + 2]) {
+    print("before: spaces=\(Spaces.of(id)) visible=\(Spaces.visible().sorted())")
+    Spaces.move([id], to: space)
+    report(id)
+}
+if let i = args.firstIndex(of: "--minimize"), args.count > i + 2, let id = CGWindowID(args[i + 1]), let on = Bool(args[i + 2]) {
+    guard let window = Windows.capture().first(where: { $0.id == id }) else { print("no such window"); exit(1) }
+    print("before: spaces=\(window.spaces) minimized=\(window.minimized) frame=\(window.frame.integral) visible=\(Spaces.visible().sorted())")
+    Windows.setMinimized(window.element, on)
+    report(id)
 }
 
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
+
+// `--shot <png>`: print the menu and draw the Profiles window into an image, without showing either, to check the UI.
+if let path = value(after: "--shot") {
+    MainActor.assumeIsolated {
+        let model = AppDelegate()
+        model.refresh()
+        let menu = NSMenu()
+        model.menuNeedsUpdate(menu)
+        func show(_ menu: NSMenu, _ indent: String) {
+            for item in menu.items {
+                print(indent + (item.isSeparatorItem ? "────" : (item.state == .on ? "✓ " : "") + item.title + (item.action == nil && item.submenu == nil ? "   (info)" : "")))
+                if let sub = item.submenu { show(sub, indent + "    ") }
+            }
+        }
+        show(menu, "")
+        let host = NSHostingView(rootView: ProfilesView(app: model).background(Color(nsColor: .windowBackgroundColor)))
+        let window = NSWindow(contentRect: NSRect(origin: CGPoint(x: -20000, y: -20000), size: Config.profilesWindowSize),
+                              styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = host
+        window.orderFrontRegardless()
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))    // let SwiftUI lay out and load icons
+        if let image = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+            host.cacheDisplay(in: host.bounds, to: image)
+            try? image.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        }
+    }
+    exit(0)
+}
 
 // `--save <name>` and `--arrange`: the two menu actions without the menu (never show dialogs).
 if let name = value(after: "--save") {

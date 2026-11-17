@@ -10,6 +10,9 @@ struct SavedWindow: Codable, Hashable {
     var display: Int          // index into Profile.displays
     var space: Int            // 1-based desktop position on that display; 0 = don't care
     var fx: Double, fy: Double, fw: Double, fh: Double
+    var minimized: Bool?      // optional so profiles saved before this was recorded still load
+
+    var isMinimized: Bool { minimized == true }
 
     func frame(on d: DisplayInfo) -> CGRect {
         CGRect(x: (Double(d.x) + fx * Double(d.width)).rounded(), y: (Double(d.y) + fy * Double(d.height)).rounded(),
@@ -27,7 +30,7 @@ struct Profile: Codable, Identifiable {
 
     var setKey: String { Displays.setKey(displays) }
 
-    /// Records where every open window is right now.
+    /// Records where every open window is right now, minimized ones included.
     static func snapshot(name: String, displays: [DisplayInfo], windows: [LiveWindow], spaces: [String: [UInt64]]) -> Profile {
         let saved = windows.compactMap { w -> SavedWindow? in
             // The Space decides the display when known; otherwise the display holding most of the window.
@@ -40,7 +43,8 @@ struct Profile: Codable, Identifiable {
             let position = w.spaces.count == 1 ? (spaces[d.uuid]?.firstIndex(of: w.spaces[0]).map { $0 + 1 } ?? 0) : 0
             return SavedWindow(bundleID: w.bundleID, appName: w.appName, title: w.title, display: index, space: position,
                                fx: (w.frame.minX - Double(d.x)) / Double(d.width), fy: (w.frame.minY - Double(d.y)) / Double(d.height),
-                               fw: w.frame.width / Double(d.width), fh: w.frame.height / Double(d.height))
+                               fw: w.frame.width / Double(d.width), fh: w.frame.height / Double(d.height),
+                               minimized: w.minimized ? true : nil)
         }
         return Profile(name: name, displays: displays, windows: saved)
     }
@@ -55,12 +59,28 @@ enum Store {
     static func load() -> [Profile] {
         guard let data = try? Data(contentsOf: Config.profilesURL) else { return [] }
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([Profile].self, from: data)) ?? []
+        if let profiles = try? decoder.decode([Profile].self, from: data) { return profiles }
+        // Unreadable (hand-edited, or written by a newer version): set it aside so the next save can't erase it.
+        let aside = Config.profilesURL.deletingLastPathComponent().appendingPathComponent("profiles.unreadable.json")
+        try? FileManager.default.removeItem(at: aside)
+        try? FileManager.default.moveItem(at: Config.profilesURL, to: aside)
+        return []
     }
 
     static func save(_ profiles: [Profile]) {
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try? encoder.encode(profiles).write(to: Config.profilesURL, options: .atomic)
+    }
+
+    /// Several profiles can be saved on the same monitors (say "Work" and "Evening"). Arrange then
+    /// uses the one last saved or applied there, so it stays predictable.
+    static func preferred(for setKey: String) -> UUID? {
+        (UserDefaults.standard.dictionary(forKey: Keys.preferred)?[setKey] as? String).flatMap { UUID(uuidString: $0) }
+    }
+    static func prefer(_ profile: Profile) {
+        var all = UserDefaults.standard.dictionary(forKey: Keys.preferred) ?? [:]
+        all[profile.setKey] = profile.id.uuidString
+        UserDefaults.standard.set(all, forKey: Keys.preferred)
     }
 }

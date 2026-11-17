@@ -36,6 +36,13 @@ enum Spaces {
         return result
     }
 
+    /// The desktop showing on each display right now.
+    static func visible() -> Set<UInt64> {
+        guard let connection, let displaySpaces,
+              let displays = displaySpaces(connection())?.takeRetainedValue() as? [[String: Any]] else { return [] }
+        return Set(displays.compactMap { (($0["Current Space"] as? [String: Any])?["ManagedSpaceID"] as? NSNumber)?.uint64Value })
+    }
+
     /// The Spaces a window is on (more than one only for "all desktops" windows).
     static func of(_ window: CGWindowID) -> [UInt64] {
         guard let connection, let spacesForWindows,

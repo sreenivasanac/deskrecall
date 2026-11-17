@@ -8,8 +8,9 @@ struct LiveWindow {
     let bundleID: String
     let appName: String
     let title: String
-    var frame: CGRect          // global CG coordinates (top-left origin)
+    var frame: CGRect          // global CG coordinates (top-left origin); kept while minimized
     var spaces: [UInt64]
+    var minimized: Bool        // in the Dock; still belongs to a desktop
 }
 
 /// Reads and moves other apps' windows through the Accessibility API (the one permission the app needs).
@@ -53,7 +54,7 @@ enum Windows {
         for elementID in UInt64(0)..<1000 {
             token.replaceSubrange(12..<20, with: withUnsafeBytes(of: elementID) { Data($0) })
             if let el = createWithToken(token as CFData)?.takeRetainedValue(),
-               let subrole: String = attr(el, kAXSubroleAttribute), subrole == kAXStandardWindowSubrole {
+               let subrole: String = attr(el, kAXSubroleAttribute), subrole == kAXStandardWindowSubrole || subrole == kAXDialogSubrole {
                 found.append(el)
             }
             if Date() > deadline { break }
@@ -61,7 +62,7 @@ enum Windows {
         return found
     }
 
-    /// Every standard, non-minimized, non-fullscreen window of every regular app, on all Spaces.
+    /// Every standard, non-fullscreen window of every regular app, on all Spaces, minimized ones included.
     static func capture() -> [LiveWindow] {
         var result: [LiveWindow] = []
         for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
@@ -79,10 +80,11 @@ enum Windows {
                 let fullscreen = (attr(el, "AXFullScreen") as Bool?) == true
                 let spaces = Spaces.of(id)      // empty = not shown on any desktop (hidden helper windows)
                 if debug { print("  ax \(id) [\(app.localizedName ?? "")] subrole=\(subrole ?? "-") min=\(minimized) full=\(fullscreen) spaces=\(spaces)") }
-                guard subrole == kAXStandardWindowSubrole, !minimized, !fullscreen, !spaces.isEmpty,
+                // Some apps (Safari, Muse) report an ordinary window as a dialog while it sits in the Dock.
+                guard subrole == kAXStandardWindowSubrole || (minimized && subrole == kAXDialogSubrole), !fullscreen, !spaces.isEmpty,
                       let frame = frame(of: el) else { continue }
                 result.append(LiveWindow(element: el, id: id, bundleID: bundleID, appName: app.localizedName ?? bundleID,
-                                         title: attr(el, kAXTitleAttribute) ?? "", frame: frame, spaces: spaces))
+                                         title: attr(el, kAXTitleAttribute) ?? "", frame: frame, spaces: spaces, minimized: minimized))
             }
         }
         return result
@@ -95,5 +97,10 @@ enum Windows {
         AXUIElementSetAttributeValue(el, kAXSizeAttribute as CFString, s)
         AXUIElementSetAttributeValue(el, kAXPositionAttribute as CFString, p)
         AXUIElementSetAttributeValue(el, kAXSizeAttribute as CFString, s)
+    }
+
+    /// Sends a window to the Dock or brings it back.
+    static func setMinimized(_ el: AXUIElement, _ minimized: Bool) {
+        AXUIElementSetAttributeValue(el, kAXMinimizedAttribute as CFString, minimized as CFBoolean)
     }
 }

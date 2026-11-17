@@ -16,16 +16,25 @@ enum Jev {
     /// The user's TypeSafe API key, kept in the login keychain. The app must add the item itself
     /// (menu, or `--store-key`): an item added by another tool makes macOS prompt on every read.
     /// A TYPESAFE_API_KEY environment variable takes precedence, for command-line use.
+    /// Read from the keychain once per launch: the menu asks for it every time it opens.
+    private static var stored: String?, loaded = false
     static var apiKey: String? {
         get {
             if let env = ProcessInfo.processInfo.environment["TYPESAFE_API_KEY"], !env.isEmpty { return env }
+            if loaded { return stored }
             let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
                                         kSecAttrAccount as String: Config.keychainAccount, kSecReturnData as String: true]
             var out: CFTypeRef?
-            guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return nil }
-            return String(data: data, encoding: .utf8)
+            let status = SecItemCopyMatching(query as CFDictionary, &out)
+            // Remember only a definite answer; a keychain that is locked right now is asked again next time.
+            loaded = status == errSecSuccess || status == errSecItemNotFound
+            guard status == errSecSuccess, let data = out as? Data else { return nil }
+            stored = String(data: data, encoding: .utf8)
+            return stored
         }
         set {
+            stored = (newValue?.isEmpty ?? true) ? nil : newValue
+            loaded = true
             let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
                                        kSecAttrAccount as String: Config.keychainAccount]
             SecItemDelete(base as CFDictionary)
