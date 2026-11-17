@@ -95,8 +95,8 @@ the surest evidence is used first:
 4. One open window and one saved window left for an app: they belong together.
 5. Anything still open goes to Jev (below).
 
-Windows of a Chromium browser (Chrome, Comet, Brave…) are matched only within their own browser
-profile, which those browsers put at the end of the window title. A Work window never takes a
+Windows of a Chromium browser are matched only within their own browser profile, which Chrome and
+Comet put at the end of the window title. A Work window never takes a
 Personal window's place.
 
 ## How it decides the unclear cases
