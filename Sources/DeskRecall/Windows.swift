@@ -5,9 +5,11 @@ import ApplicationServices
 struct LiveWindow {
     let element: AXUIElement
     let id: CGWindowID
+    let pid: pid_t
     let bundleID: String
     let appName: String
     let title: String
+    let document: String?      // file or URL shown, when the app reports one (document-based apps)
     var frame: CGRect          // global CG coordinates (top-left origin); kept while minimized
     var spaces: [UInt64]
     var minimized: Bool        // in the Dock; still belongs to a desktop
@@ -81,13 +83,15 @@ enum Windows {
                 let minimized = (attr(el, kAXMinimizedAttribute) as Bool?) == true
                 let fullscreen = (attr(el, "AXFullScreen") as Bool?) == true
                 let spaces = Spaces.of(id)      // empty = not shown on any desktop (hidden helper windows)
-                if debug { print("  ax \(id) [\(app.localizedName ?? "")] subrole=\(subrole ?? "-") min=\(minimized) full=\(fullscreen) spaces=\(spaces)") }
+                // Only files: browsers report the page address here, which changes with every tab and is nobody's business.
+                let document = (attr(el, kAXDocumentAttribute) as String?).flatMap { $0.hasPrefix("file:") ? $0 : nil }
+                if debug { print("  ax \(id) [\(app.localizedName ?? "")] subrole=\(subrole ?? "-") min=\(minimized) full=\(fullscreen) spaces=\(spaces) doc=\(document ?? "-") ident=\(attr(el, kAXIdentifierAttribute) as String? ?? "-") title=\(attr(el, kAXTitleAttribute) as String? ?? "-")") }
                 // Some apps (Safari, Muse) report an ordinary window as a dialog while it sits in the Dock.
                 // "On no desktop" only means a hidden helper window while desktops can be read at all.
                 guard subrole == kAXStandardWindowSubrole || (minimized && subrole == kAXDialogSubrole), !fullscreen,
                       !spaces.isEmpty || !Spaces.available, let frame = frame(of: el) else { continue }
-                result.append(LiveWindow(element: el, id: id, bundleID: bundleID, appName: app.localizedName ?? bundleID,
-                                         title: attr(el, kAXTitleAttribute) ?? "", frame: frame, spaces: spaces, minimized: minimized))
+                result.append(LiveWindow(element: el, id: id, pid: pid, bundleID: bundleID, appName: app.localizedName ?? bundleID,
+                                         title: attr(el, kAXTitleAttribute) ?? "", document: document, frame: frame, spaces: spaces, minimized: minimized))
             }
         }
         return result

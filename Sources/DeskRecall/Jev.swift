@@ -32,6 +32,17 @@ enum Jev {
         return stored
     }
 
+    /// Whether a key is stored, found without reading it. Asking the keychain for the secret can
+    /// make macOS show its permission dialog (after an app update, for one); that is acceptable when
+    /// a question is about to be sent to Jev, never just to draw a label or at launch.
+    static var hasKey: Bool {
+        if let env = ProcessInfo.processInfo.environment["TYPESAFE_API_KEY"], !env.isEmpty { return true }
+        if loaded { return stored != nil }
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
+                                    kSecAttrAccount as String: Config.keychainAccount]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
     /// Puts the key in the keychain; false when the keychain refused. Deletes and adds rather than
     /// updates, so an item first created by another tool ends up owned by this app (no prompts).
     static func store(_ key: String) -> Bool {

@@ -8,7 +8,7 @@ func value(after flag: String) -> String? {
     args.firstIndex(of: flag).flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
 }
 if let path = value(after: "--out") { freopen(path, "w", stdout) }
-UserDefaults.standard.register(defaults: [Keys.autoArrange: true, Keys.askWhenUnsure: true])    // both toggles start on
+UserDefaults.standard.register(defaults: [Keys.autoArrange: true, Keys.whenUnsure: Unsure.ask.rawValue])
 
 // `--selfcheck`: the pure logic, no permissions or network needed.
 if args.contains("--selfcheck") {
@@ -34,12 +34,30 @@ if args.contains("--selfcheck") {
                  "a monitor is the same monitor at another resolution")
 
     // "Displays have separate Spaces" off: one desktop spans both displays, so the frame must pick the display.
-    let onSecond = LiveWindow(element: AXUIElementCreateSystemWide(), id: 1, bundleID: "b", appName: "a", title: "t",
+    let onSecond = LiveWindow(element: AXUIElementCreateSystemWide(), id: 1, pid: 1, bundleID: "b", appName: "a", title: "t", document: nil,
                               frame: CGRect(x: 100, y: 100, width: 400, height: 300), spaces: [5], minimized: false)
     let shared = Profile.snapshot(name: "s", displays: [display, other], windows: [onSecond], spaces: ["u": [4, 5], "v": [4, 5]])
     precondition(shared.windows[0].display == 1 && shared.windows[0].space == 2, "a shared desktop leaves the display to the window's frame")
     let own = Profile.snapshot(name: "o", displays: [display, other], windows: [onSecond], spaces: ["u": [4, 5], "v": [6]])
     precondition(own.windows[0].display == 0 && own.windows[0].space == 2, "a desktop of one display decides the display")
+
+    // Telling look-alike setups apart: two units of one monitor model with the same placeholder serial.
+    var home = display; home.made = "2019w39"
+    var office = home; office.uuid = "w"; office.x = 1512
+    let atHome = Profile(name: "h", displays: [home, other], windows: [])
+    precondition(atHome.closeness(to: [home, other]) == 6, "same units, same arrangement: recognised twice over")
+    precondition(atHome.closeness(to: [office, other]) == 3, "macOS calls it another monitor and it sits elsewhere: a weaker fit")
+    office.made = "2021w05"
+    precondition(!atHome.fits([office, other]), "a different manufacture date is a different unit")
+    precondition(Profile(name: "old", displays: [display, other], windows: []).fits([office, other]), "profiles without a date still fit")
+    // Identical twins side by side: macOS's own id decides which is which, not left and right.
+    var left = home, right = home
+    left.uuid = "L"; right.uuid = "R"; right.x = 2000
+    precondition(Displays.pair([right, left], with: [left, right])[0]?.uuid == "R", "twins follow their id")
+
+    precondition(Matching.family("c", "Google Chrome", "Inbox - Google Chrome - Work") != Matching.family("c", "Google Chrome", "News - Google Chrome - Personal")
+                 && Matching.family("c", "Google Chrome", "Inbox - Google Chrome - Work") == Matching.family("c", "Google Chrome", "Docs - Google Chrome - Work")
+                 && Matching.family("s", "Safari", "A - B") == Matching.family("s", "Safari", "C"), "browser profiles keep to themselves")
     print("selfcheck ok")
     exit(0)
 }
@@ -88,11 +106,12 @@ if let i = args.firstIndex(of: "--minimize"), args.count > i + 2, let id = CGWin
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
-// `--shot <png>`: print the menu and draw the Profiles window into an image, without showing either, to check the UI.
+// `--shot <png> [--pane Settings]`: print the menu and draw the window into an image, without showing either, to check the UI.
 if let path = value(after: "--shot") {
     MainActor.assumeIsolated {
         let model = AppDelegate()
         model.refresh()
+        model.pane = value(after: "--pane").flatMap(AppDelegate.Pane.init) ?? .profiles
         let menu = NSMenu()
         model.menuNeedsUpdate(menu)
         func show(_ menu: NSMenu, _ indent: String) {
@@ -136,4 +155,19 @@ if args.contains("--arrange") {
 
 let delegate = MainActor.assumeIsolated { AppDelegate() }   // top-level code runs on the main thread
 app.delegate = delegate
+
+// For taking screenshots of the real thing: `--show Profiles|Settings` opens the window on that pane,
+// `--light` forces the light appearance.
+if args.contains("--light") { app.appearance = NSAppearance(named: .aqua) }
+if let pane = value(after: "--show").flatMap(AppDelegate.Pane.init) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        MainActor.assumeIsolated {
+            delegate.show(pane)
+            // On the sharpest screen, so the screenshot comes out at Retina resolution.
+            if let screen = NSScreen.screens.max(by: { $0.backingScaleFactor < $1.backingScaleFactor }), let window = NSApp.windows.first(where: { $0.styleMask.contains(.titled) }) {
+                window.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - window.frame.width / 2, y: screen.visibleFrame.midY - window.frame.height / 2))
+            }
+        }
+    }
+}
 app.run()

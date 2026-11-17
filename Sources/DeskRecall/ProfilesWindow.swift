@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The Profiles window: every saved profile as a picture of its displays and desktops.
-/// View only by design: a layout is changed by arranging the real windows and pressing Update.
+/// The app's window: a Profiles pane showing every saved profile as a picture of its displays and
+/// desktops, and a Settings pane. Profiles are view only by design: a layout is changed by
+/// arranging the real windows and pressing Update.
 struct ProfilesView: View {
     @ObservedObject var app: AppDelegate
     @State private var selection: Profile.ID?
@@ -13,37 +14,46 @@ struct ProfilesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if !app.trusted { permissionBanner }
-            if app.profiles.isEmpty {
-                emptyState
-            } else {
-                HStack(spacing: 0) {
-                    List(app.profiles, selection: Binding(get: { selected?.id }, set: { selection = $0 })) { p in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(p.name).lineLimit(2)
-                            Text((p.setKey == app.setKey ? "Connected now · " : "") + "\(p.windows.count) windows")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 3)
-                    }
-                    .listStyle(.sidebar)
-                    .frame(width: 230)
-                    Divider()
-                    if let profile = selected { ProfileDetail(app: app, profile: profile).id(profile.id) }
-                }
+            Picker("Pane", selection: $app.pane) {
+                ForEach(AppDelegate.Pane.allCases, id: \.self) { Text($0.rawValue) }
             }
+            .pickerStyle(.segmented).labelsHidden().fixedSize().padding(.vertical, 10)
             Divider()
-            HStack {
-                if app.busy { ProgressView().controlSize(.small) }
-                Text(app.status).font(.callout).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
-                Spacer()
-                Button("Save Current Layout as New Profile…") { app.saveNew() }
-            }
-            .padding(10)
+            if !app.trusted { permissionBanner }
+            if app.pane == .settings { SettingsPane(app: app) } else { profilesPane }
         }
         .frame(minWidth: 760, minHeight: 480)
         // An app without a Dock icon has no main menu, so ⌘W needs a home of its own.
         .background(Button("") { NSApp.keyWindow?.performClose(nil) }.keyboardShortcut("w").opacity(0))
+    }
+
+    @ViewBuilder private var profilesPane: some View {
+        if app.profiles.isEmpty {
+            emptyState
+        } else {
+            HStack(spacing: 0) {
+                List(app.profiles, selection: Binding(get: { selected?.id }, set: { selection = $0 })) { p in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(p.name).lineLimit(2)
+                        Text((p.fits(app.displays) ? "Connected now · " : "") + "\(p.windows.count) windows")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 3)
+                }
+                .listStyle(.sidebar)
+                .frame(width: 230)
+                Divider()
+                if let profile = selected { ProfileDetail(app: app, profile: profile).id(profile.id) }
+            }
+        }
+        Divider()
+        HStack {
+            if app.busy { ProgressView().controlSize(.small) }
+            Text(app.status).font(.callout).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+            Spacer()
+            Button("Save Current Layout as New Profile…") { app.saveNew() }
+        }
+        .padding(10)
     }
 
     private var permissionBanner: some View {
@@ -90,12 +100,20 @@ private struct ProfileDetail: View {
     }
 
     private var header: some View {
+        HStack(alignment: .top, spacing: 20) {
+            summary
+            Spacer(minLength: 0)
+            if profile.displays.count > 1 { ArrangementMap(displays: profile.displays) }
+        }
+    }
+
+    private var summary: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(profile.name).font(.title2.bold())
             Text("Saved \(profile.savedAt.formatted(date: .abbreviated, time: .shortened)) · \(profile.windows.count) windows"
                  + (minimizedCount > 0 ? ", \(minimizedCount) minimized" : ""))
                 .foregroundStyle(.secondary)
-            if profile.setKey == app.setKey {
+            if profile.fits(app.displays) {
                 Label("Made for the displays connected now. Arrange uses it as saved.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             } else {
                 Label("Made for a different display setup. Applied here, it is adapted to the displays connected now.", systemImage: "arrow.triangle.2.circlepath")
@@ -124,6 +142,11 @@ private struct ProfileDetail: View {
             // String(...) keeps SwiftUI from formatting the numbers as "1,920".
             Label(String("\(display.name) · \(display.width)×\(display.height)"), systemImage: display.builtin ? "laptopcomputer" : "display")
                 .font(.headline)
+            // What tells this monitor from another of the same model.
+            if let made = display.made, !display.builtin {
+                Text(String("Serial \(display.serial) · made \(made.replacingOccurrences(of: "w", with: ", week "))"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 18, alignment: .top)], alignment: .leading, spacing: 18) {
                 ForEach(desktops, id: \.self) { desktop in
                     DesktopCard(title: desktop == 0 ? "Every desktop" : "Desktop \(desktop)",
@@ -133,6 +156,28 @@ private struct ProfileDetail: View {
                 }
             }
         }
+    }
+}
+
+/// The profile's displays as they sit next to each other, like the Arrange picture in System Settings.
+private struct ArrangementMap: View {
+    let displays: [DisplayInfo]
+
+    var body: some View {
+        let all = displays.map(\.bounds).reduce(CGRect.null) { $0.union($1) }
+        let scale = min(200 / max(all.width, 1), 96 / max(all.height, 1))
+        ZStack(alignment: .topLeading) {
+            ForEach(displays.indices, id: \.self) { i in
+                let d = displays[i]
+                RoundedRectangle(cornerRadius: 3).fill(Color.accentColor.opacity(0.15))
+                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Color.accentColor.opacity(0.6)))
+                    .overlay(Text(d.builtin ? "Built-in" : d.name).font(.system(size: 9)).lineLimit(1).padding(3))
+                    .frame(width: CGFloat(d.width) * scale - 2, height: CGFloat(d.height) * scale - 2)
+                    .offset(x: (CGFloat(d.x) - all.minX) * scale, y: (CGFloat(d.y) - all.minY) * scale)
+            }
+        }
+        .frame(width: all.width * scale, height: all.height * scale, alignment: .topLeading)
+        .help("How these displays were arranged when the profile was saved")
     }
 }
 

@@ -13,6 +13,14 @@ enum Matching {
         }
         return result
     }
+
+    /// The group a window is matched within: its app, and for Chromium browsers its profile, which
+    /// they put at the end of the title ("Inbox - Google Chrome - Work"). A window never changes profile.
+    /// ponytail: other browsers name the profile elsewhere or not at all; those are left to Jev.
+    static func family(_ bundleID: String, _ appName: String, _ title: String) -> String {
+        let profile = title.range(of: " - \(appName) - ", options: .backwards).map { String(title[$0.upperBound...]) }
+        return bundleID + "\u{1}" + (profile ?? "")
+    }
 }
 
 /// The Arrange button, in three stages: pick the profile for the connected displays, decide which
@@ -40,10 +48,12 @@ enum Arranger {
         let live = Windows.capture()
         var notes: [String] = []
 
-        // 1. Which profile? One saved on exactly these monitors wins; with several, the one last used here.
-        let key = Displays.setKey(displays)
-        let same = profiles.filter { $0.setKey == key }
-        var chosen = forced ?? (same.count == 1 ? same[0] : same.first { $0.id == Store.preferred(for: key) })
+        // 1. Which profile? One saved on exactly these monitors wins. With several, the one whose
+        //    monitors are most surely these very units; if that is still a tie, the one last used here.
+        let scored = profiles.compactMap { p in p.closeness(to: displays).map { (profile: p, score: $0) } }
+        let best = scored.map(\.score).max()
+        let same = scored.filter { $0.score == best }.map(\.profile)
+        var chosen = forced ?? (same.count == 1 ? same[0] : same.first { $0.id == Store.preferred(for: Displays.setKey(displays)) })
         if chosen == nil {
             let pick = await chooseProfile(among: same.isEmpty ? profiles : same, displays: displays, live: live, interactive: interactive)
             if pick.cancelled { return Outcome(summary: "Arrange cancelled", cancelled: true) }
@@ -51,7 +61,7 @@ enum Arranger {
             if let note = pick.note { notes.append(note) }
         }
         guard let profile = chosen else { return Outcome(summary: "No saved profile fits this display setup") }
-        let exact = profile.setKey == key
+        let exact = profile.fits(displays)
         if exact { Store.prefer(profile) }
 
         // 2. Which display stands in for which, and which window is which.
@@ -73,7 +83,7 @@ enum Arranger {
         -> (profile: Profile?, note: String?, cancelled: Bool) {
         var questions = ["close": Jev.noul("Is at least one of saved_profiles made for a display setup similar enough to current_displays (the same monitors, or the same number and kind of displays) that its window layout could reasonably be reused here?")]
         if candidates.count > 1 {
-            questions["profile"] = Jev.choice("Which saved profile was made for the display setup most similar to current_displays? Weigh, in order: the same physical monitors (vendor, model, serial, name), the same number of displays, resolution, arrangement, and which apps are open now.",
+            questions["profile"] = Jev.choice("Which saved profile was made for the display setup most similar to current_displays? Weigh, in order: the same physical monitors (vendor, model, serial, manufacture date, name), the same number of displays, resolution, arrangement, and which apps are open now.",
                 Dictionary(uniqueKeysWithValues: candidates.enumerated().map { ("p\($0)", "\($1.name): " + $1.displays.map(\.summary).joined(separator: " + ")) }))
         }
         let state: [String: Any] = [
@@ -117,10 +127,7 @@ enum Arranger {
         // Saved display -> connected display.
         var displayMap: [Int: DisplayInfo] = [:]
         if exact {
-            var free = displays     // both lists are sorted left to right, so identical twins keep their order
-            for (i, d) in profile.displays.enumerated() {
-                if let j = free.firstIndex(where: { $0.hardwareKey == d.hardwareKey }) { displayMap[i] = free.remove(at: j) }
-            }
+            displayMap = Displays.pair(profile.displays, with: displays)
         } else if displays.count == 1 {
             for i in profile.displays.indices { displayMap[i] = displays[0] }
         } else {
@@ -134,16 +141,19 @@ enum Arranger {
         var pairs: [Pair] = []
         var groups: [(lives: [Int], slots: [Int])] = []       // what is left for Jev
         func open(_ l: Int) -> String { "\"\(live[l].title)\"" + (live[l].minimized ? " (minimized)" : "") }
-        let liveByApp = Dictionary(grouping: live.indices, by: { live[$0].bundleID })
-        for (app, appSlots) in Dictionary(grouping: profile.windows.indices, by: { profile.windows[$0].bundleID }) {
+        // Windows only ever compete within their own app, and within their own browser profile.
+        let liveByApp = Dictionary(grouping: live.indices, by: { Matching.family(live[$0].bundleID, live[$0].appName, live[$0].title) })
+        let slotsByApp = Dictionary(grouping: profile.windows.indices, by: { Matching.family(profile.windows[$0].bundleID, profile.windows[$0].appName, profile.windows[$0].title) })
+        for (app, appSlots) in slotsByApp {
             guard var lives = liveByApp[app] else { continue }  // app isn't open: nothing to place, and that's fine
-            var slots: [Int] = []
-            for s in appSlots {
-                // Same title = same window. Among twins, the one already in the same state (minimized or not).
-                let slot = profile.windows[s]
-                if let k = lives.firstIndex(where: { live[$0].title == slot.title && live[$0].minimized == slot.isMinimized })
-                    ?? lives.firstIndex(where: { live[$0].title == slot.title }) { pairs.append((lives.remove(at: k), s)) }
-                else { slots.append(s) }
+            var slots = appSlots
+            // Surest evidence first, each rule over every slot before the next rule gets a turn.
+            for same in sameWindow {
+                slots.removeAll { s in
+                    guard let k = lives.firstIndex(where: { same(profile.windows[s], live[$0]) }) else { return false }
+                    pairs.append((lives.remove(at: k), s))
+                    return true
+                }
             }
             if lives.isEmpty || slots.isEmpty { continue }
             if lives.count == 1 && slots.count == 1 { pairs.append((lives[0], slots[0])); continue }
@@ -155,7 +165,7 @@ enum Arranger {
             } else {
                 let options = Dictionary(uniqueKeysWithValues: slots.map { ("s\($0)", describe(profile.windows[$0], profile)) })
                 for l in lives {
-                    questions["w\(l)"] = Jev.choice("An open \(live[l].appName) window is titled \(open(l)). Which saved window is it, judging by title, document, project, site or purpose?", options)
+                    questions["w\(l)"] = Jev.choice("An open \(live[l].appName) window is titled \(open(l)). Which saved window is it, judging by title, document, project, site, account or purpose?", options)
                 }
             }
         }
@@ -208,7 +218,11 @@ enum Arranger {
 
         // Conflicts: Jev's low-confidence guesses go to the user, in one dialog.
         if !unsure.isEmpty {
-            if interactive && UserDefaults.standard.bool(forKey: Keys.askWhenUnsure) {
+            switch Unsure.current {
+            case .guess:
+                pairs.append(contentsOf: unsure.map { ($0.live, $0.slot) })
+                notes.append("\(unsure.count) window(s) placed by best guess")
+            case .ask where interactive:
                 let rows = unsure.map { u in
                     (label: "\(live[u.live].appName): \(live[u.live].title.prefix(48))",
                      options: u.slots.map { describe(profile.windows[$0], profile) } + ["Leave where it is"],
@@ -219,15 +233,20 @@ enum Arranger {
                 } else {
                     notes.append("\(unsure.count) uncertain window(s) left alone")
                 }
-            } else {
-                // Nobody to ask (auto-arrange, or asking is switched off): the best guess beats leaving
-                // the window wherever a display change dropped it. It always lands in a slot of its own app.
-                pairs.append(contentsOf: unsure.map { ($0.live, $0.slot) })
-                notes.append("\(unsure.count) window(s) placed by best guess")
+            default:    // told to leave them, or nobody is there to ask (auto-arrange)
+                notes.append("\(unsure.count) uncertain window(s) left alone")
             }
         }
         return (displayMap, pairs, notes)
     }
+
+    /// What makes an open window the one a slot was saved from, surest first.
+    private static let sameWindow: [(SavedWindow, LiveWindow) -> Bool] = [
+        { $0.windowID == $1.id && $0.pid == $1.pid },                     // never closed since the save
+        { $0.document != nil && $0.document == $1.document },            // shows the same file
+        { $0.title == $1.title && $0.isMinimized == $1.minimized },      // same title; among twins, the one in the same state
+        { $0.title == $1.title },
+    ]
 
     // MARK: 3. Move
 

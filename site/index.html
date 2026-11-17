@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeskRecall: every window back where it belongs</title>
+<meta name="description" content="A macOS menu bar app that restores your window layout for whichever displays are connected: the right display, the right desktop, the right size, minimized or not.">
+<meta property="og:title" content="DeskRecall: every window back where it belongs">
+<meta property="og:description" content="A macOS menu bar app that restores your window layout for whichever displays are connected: the right display, the right desktop, the right size, minimized or not.">
+<meta property="og:image" content="https://deskrecall.pragnyalabs.com/images/og.png">
+<meta property="og:url" content="https://deskrecall.pragnyalabs.com/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Colours come from the app icon: an indigo desk, white windows, one amber window. */
+  :root {
+    --ink: #171a45;
+    --ink-soft: #2b2f6b;
+    --paper: #f5f6fb;
+    --card: #ffffff;
+    --line: #d9dcec;
+    --text: #2a2d47;
+    --muted: #5d6180;
+    --amber: #ffb84d;
+    --lavender: #a9addb;
+    --measure: 62ch;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--text);
+    font: 400 1.0625rem/1.6 "IBM Plex Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif; color: var(--ink); line-height: 1.1; margin: 0; }
+  h1 { font-size: clamp(2.5rem, 6vw, 4.4rem); font-weight: 700; letter-spacing: -0.02em; }
+  h2 { font-size: clamp(1.7rem, 3.4vw, 2.5rem); font-weight: 700; letter-spacing: -0.015em; margin-bottom: 1rem; }
+  h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.35rem; }
+  p { margin: 0 0 1rem; max-width: var(--measure); }
+  a { color: var(--ink-soft); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; border-radius: 6px; }
+  code { font: 0.92em ui-monospace, "SF Mono", Menlo, monospace; background: #e9ebf6; padding: 0.1em 0.35em; border-radius: 4px; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 72px 0; }
+  section + section { border-top: 1px solid var(--line); }
+
+  /* Header */
+  .top { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 700 1.2rem "Bricolage Grotesque", sans-serif; color: var(--ink); text-decoration: none; }
+  .brand img { width: 36px; height: 36px; }
+  .top nav { display: flex; gap: 22px; font-size: 0.98rem; }
+  .top nav a { text-decoration: none; color: var(--text); }
+  .top nav a:hover { text-decoration: underline; }
+
+  /* Hero */
+  .hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 48px; align-items: center; padding: 40px 0 80px; }
+  .hero p.lead { font-size: 1.25rem; line-height: 1.5; margin: 1.4rem 0 1.8rem; max-width: 34ch; }
+  .actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .button { display: inline-block; background: var(--ink); color: #fff; font-weight: 600; padding: 0.85rem 1.4rem; border-radius: 12px; text-decoration: none; border: 0; cursor: pointer; font-size: 1.05rem; font-family: inherit; }
+  .button:hover { background: var(--ink-soft); }
+  .fine { font-size: 0.92rem; color: var(--muted); margin-top: 1rem; max-width: 40ch; }
+
+  /* The desk: a small model of what the app does. Positions are percentages of the stage. */
+  .desk { background: linear-gradient(180deg, #2b3190, var(--ink)); border-radius: 28px; padding: 22px 22px 18px; color: #fff; }
+  .stage { position: relative; aspect-ratio: 16 / 10; }
+  .screen { position: absolute; border: 2px solid rgba(255,255,255,0.55); border-radius: 10px; background: rgba(255,255,255,0.06); transition: opacity 0.5s; }
+  .screen span { position: absolute; left: 0; bottom: -1.7em; font-size: 0.8rem; color: rgba(255,255,255,0.75); white-space: nowrap; }
+  .screen.monitor { left: 2%; top: 4%; width: 58%; height: 60%; }
+  .screen.laptop { left: 66%; top: 38%; width: 32%; height: 38%; }
+  .screen.gone { opacity: 0.18; border-style: dashed; }
+  .win { position: absolute; border-radius: 6px; box-shadow: 0 6px 14px rgba(10,12,40,0.35); transition: left 0.7s cubic-bezier(.2,.8,.2,1), top 0.7s cubic-bezier(.2,.8,.2,1), width 0.7s cubic-bezier(.2,.8,.2,1), height 0.7s cubic-bezier(.2,.8,.2,1); }
+  .win::before { content: ""; position: absolute; left: 7%; top: 9%; width: 22%; height: 5px; border-radius: 3px; background: rgba(23,26,69,0.28); }
+  .win.a { background: #fff; } .win.b { background: var(--lavender); } .win.c { background: var(--amber); }
+  .win.d { background: #e6e7f5; } .win.e { background: #c9ccec; }
+  .deskbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 30px; }
+  .deskbar p { margin: 0; font-size: 0.95rem; color: rgba(255,255,255,0.85); max-width: 34ch; min-height: 3em; }
+  .deskbar button { background: var(--amber); color: var(--ink); font: 600 1rem "IBM Plex Sans", sans-serif; border: 0; border-radius: 10px; padding: 0.7rem 1.1rem; cursor: pointer; white-space: nowrap; }
+  .deskbar button:hover { background: #ffc66e; }
+
+  /* Problem */
+  .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin-top: 2rem; }
+  .cols p { font-size: 1rem; }
+
+  /* Screenshots */
+  figure { margin: 2rem 0 0; }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { font-size: 0.92rem; color: var(--muted); margin-top: 0.25rem; }
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+  /* Tables */
+  .scroll { overflow-x: auto; margin-top: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 0.98rem; background: var(--card); border-radius: 14px; overflow: hidden; }
+  th, td { text-align: left; padding: 0.8rem 1rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td, tr:last-child th { border-bottom: 0; }
+  thead th { font-family: "Bricolage Grotesque", sans-serif; font-size: 1.05rem; color: var(--ink); }
+  tbody th { font-weight: 500; }
+  .ours { background: #fff6e6; font-weight: 500; }
+  .no { color: var(--muted); }
+
+  /* Steps */
+  ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 2rem 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+  ol.steps li { counter-increment: step; }
+  ol.steps li::before { content: counter(step); display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border-radius: 8px; background: var(--ink); color: #fff; font: 700 1.1rem "Bricolage Grotesque", sans-serif; margin-bottom: 0.8rem; }
+  ol.steps p { font-size: 1rem; }
+
+  .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 48px; margin-top: 1.5rem; }
+  .two ul, .install ol { padding-left: 1.2rem; margin: 0; max-width: var(--measure); }
+  .two li, .install li { margin-bottom: 0.6rem; }
+  .install { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 48px; margin-top: 1.5rem; align-items: start; }
+  .install table { min-width: 0; }
+  pre { background: var(--ink); color: #e9ebff; padding: 1rem 1.2rem; border-radius: 12px; overflow-x: auto; font: 0.9rem/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+
+  footer { padding: 36px 0 56px; border-top: 1px solid var(--line); font-size: 0.95rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-between; }
+
+  @media (max-width: 860px) {
+    .hero, .install, .two { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+    .cols, ol.steps, .pair { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    .top nav a.optional { display: none; }
+    section { padding: 52px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .win, .screen { transition: none; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <a class="brand" href="#"><img src="icon.png" alt="">DeskRecall</a>
+    <nav>
+      <a class="optional" href="#differs">How it differs</a>
+      <a class="optional" href="#works">How it works</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/sreenivasanac/deskrecall">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <h1>Every window back where it belongs.</h1>
+        <p class="lead">DeskRecall is a macOS menu bar app that restores your window layout for whichever displays are connected: the right display, the right desktop, the right size, minimized or not.</p>
+        <div class="actions">
+          <a class="button" href="https://github.com/sreenivasanac/deskrecall/releases/latest/download/DeskRecall.zip">Download for macOS</a>
+          <a href="https://github.com/sreenivasanac/deskrecall">Read the source on GitHub</a>
+        </div>
+        <p class="fine">Free. macOS 14 or later, Apple Silicon and Intel. Not notarized yet, so the first launch needs one extra click: see <a href="#install">Install</a>.</p>
+      </div>
+
+      <div class="desk" aria-label="A small model of what DeskRecall does">
+        <div class="stage" id="stage">
+          <div class="screen monitor" id="monitor"><span>Monitor</span></div>
+          <div class="screen laptop"><span>Laptop</span></div>
+          <div class="win a"></div><div class="win b"></div><div class="win c"></div><div class="win d"></div><div class="win e"></div>
+        </div>
+        <div class="deskbar">
+          <p id="caption" aria-live="polite"></p>
+          <button id="next" type="button"></button>
+        </div>
+      </div>
+    </div>
+
+    <section id="problem">
+      <h2>macOS forgets where your windows go</h2>
+      <p>You plug your laptop into the monitor at home, then into the ones at the office, then work from the sofa. Each time, your windows end up wherever they landed.</p>
+      <div class="cols">
+        <div><h3>Wrong display</h3><p>Unplug a monitor and everything piles onto the laptop screen. Plug it back in and only some of it returns.</p></div>
+        <div><h3>Wrong desktop</h3><p>You keep mail on one desktop and code on another. After a display change they are mixed together, and no layout tool sorts them back out.</p></div>
+        <div><h3>Wrong state</h3><p>The chat window you keep minimized is in the middle of the screen. The one you need is still in the Dock.</p></div>
+      </div>
+    </section>
+
+    <section id="works">
+      <h2>Save a layout once, get it back every time</h2>
+      <ol class="steps">
+        <li><h3>Put your windows where you want them</h3><p>Across every display and desktop. Minimize the ones you want out of the way.</p></li>
+        <li><h3>Save a profile</h3><p>One per display setup: laptop only, home monitor, office monitors. It takes one click.</p></li>
+        <li><h3>Arrange</h3><p>Click Arrange, or just plug a display in. DeskRecall finds the profile for the displays connected now and moves every window back.</p></li>
+      </ol>
+      <figure>
+        <img src="images/profiles.png" width="2024" height="1520" alt="The Profiles window. A saved layout is drawn display by display and desktop by desktop, with each window's app icon, and a small picture of how the displays are arranged.">
+        <figcaption>Every profile is a picture you can check: the displays as they were arranged, each desktop to scale, and what was minimized. The windows shown are made up.</figcaption>
+      </figure>
+    </section>
+
+    <section id="differs">
+      <h2>How it differs from Stay and Rectangle Pro</h2>
+      <p>Window managers snap windows into halves and thirds. Layout savers put windows back on a display. DeskRecall does one job they leave undone: it puts a whole working layout back, across desktops, including what was minimized.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th></th><th>Stay</th><th>Rectangle Pro</th><th>DeskRecall</th></tr></thead>
+          <tbody>
+            <tr><th>A layout per display setup</th><td>Yes, exact match only</td><td>Yes, per named display</td><td class="ours">Yes, and the closest profile is adapted to a new setup</td></tr>
+            <tr><th>Moves windows to other desktops (Spaces)</th><td class="no">No</td><td class="no">No</td><td class="ours">Yes</td></tr>
+            <tr><th>Reaches windows on desktops you aren't looking at</th><td class="no">No</td><td class="no">No</td><td class="ours">Yes</td></tr>
+            <tr><th>Restores minimized state</th><td class="no">No</td><td class="no">No</td><td class="ours">Yes, both ways</td></tr>
+            <tr><th>Shows a saved layout as a picture</th><td class="no">No</td><td class="no">No</td><td class="ours">Yes</td></tr>
+            <tr><th>Windows whose titles changed</th><td>Manual linking and patterns</td><td>Title patterns, window order</td><td class="ours">Window identity first, then a decision model</td></tr>
+            <tr><th>Snapping, halves and thirds, shortcuts</th><td class="no">No</td><td>Yes</td><td class="ours">No. Keep Rectangle for that; the two work together.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="identity">
+      <h2>It knows which monitor, and which window</h2>
+      <div class="two">
+        <div>
+          <h3>Two monitors of the same model are not the same monitor</h3>
+          <ul>
+            <li>A monitor is identified by vendor, model and serial number. Many monitors ship with a placeholder serial, so DeskRecall also records the week and year it was made and the identifier macOS gives it.</li>
+            <li>The monitor at the office does not pick up the profile you saved at home, even when both are the same model.</li>
+            <li>Two identical monitors side by side each keep their own windows.</li>
+            <li>The same monitor at a different scaled resolution is still the same monitor.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>A window is more than its title</h3>
+          <ul>
+            <li>While a window stays open it is recognised exactly, whatever its title says now. Plugging and unplugging displays never closes windows, so this covers the everyday case.</li>
+            <li>After that: the file it shows, then its title.</li>
+            <li>Windows of Chrome and other Chromium browsers are matched only within their own browser profile. A Work window never takes a Personal window's place.</li>
+            <li>What is still unclear goes to a decision model, and you choose what happens when even that is unsure: ask, take the best guess, or leave the window alone.</li>
+          </ul>
+        </div>
+      </div>
+      <figure class="pair">
+        <img src="images/settings.png" width="2024" height="1520" alt="The Settings pane: arrange automatically when displays change, what to do when unsure which window is which, launch at login, Accessibility permission, and the TypeSafe Jev key.">
+        <img src="images/profiles-dark.png" width="1936" height="1432" alt="The Profiles window in dark mode.">
+      </figure>
+      <p style="margin-top:1.5rem">The decision model is <a href="https://typesafe.ai">TypeSafe Jev</a>, and it is optional. With a key, the names of your displays and the titles of the windows in question are sent to it for the unclear cases only. Without a key nothing leaves your Mac.</p>
+    </section>
+
+    <section id="install">
+      <h2>Install</h2>
+      <div class="install">
+        <div>
+          <ol>
+            <li><a href="https://github.com/sreenivasanac/deskrecall/releases/latest/download/DeskRecall.zip">Download DeskRecall.zip</a>, unzip it and move DeskRecall to your Applications folder.</li>
+            <li>Open it. The app is not notarized by Apple yet, so macOS blocks the first launch. Open System Settings, go to Privacy &amp; Security, scroll to Security and click <strong>Open Anyway</strong>.</li>
+            <li>Grant <strong>Accessibility</strong> when asked. It is the only permission the app uses; it lets it read window titles and move windows.</li>
+            <li>Arrange your windows, click the menu bar icon and choose <strong>Save Layout as New Profile…</strong>. Do this once per display setup.</li>
+          </ol>
+          <p style="margin-top:1.5rem">Prefer to build it yourself? You need the Xcode command line tools.</p>
+<pre>git clone https://github.com/sreenivasanac/deskrecall.git
+cd deskrecall
+scripts/build-app.sh</pre>
+          <p>The <a href="https://github.com/sreenivasanac/deskrecall#readme">README</a> has the full details: the menu, the command line, and the known limits.</p>
+        </div>
+        <div>
+          <h3>Requirements and compatibility</h3>
+          <table>
+            <tbody>
+              <tr><th>macOS</th><td>14 (Sonoma) or later. Moving windows between desktops needs macOS 26.4 or later; older versions still restore display, position, size and minimized state.</td></tr>
+              <tr><th>Mac</th><td>Apple Silicon or Intel. Tested on Apple Silicon with macOS 26.7; Intel is untested.</td></tr>
+              <tr><th>Permission</th><td>Accessibility only.</td></tr>
+              <tr><th>Network</th><td>None, unless you add a TypeSafe Jev key.</td></tr>
+              <tr><th>Mac App Store</th><td>Not available there: desktops are handled through a private macOS framework.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>DeskRecall, a Pragnya Labs project.</span>
+    <span><a href="https://github.com/sreenivasanac/deskrecall">Source</a> &nbsp; <a href="https://github.com/sreenivasanac/deskrecall/releases">Releases</a> &nbsp; <a href="https://github.com/sreenivasanac/deskrecall/issues">Report a problem</a></span>
+  </footer>
+</div>
+
+<script>
+// The desk model: five windows and three moments of an ordinary day. Each frame is [left, top, width, height] in % of the stage.
+const frames = {
+  arranged: [[4, 8, 27, 52], [33, 8, 25, 25], [33, 36, 25, 24], [67.5, 41, 14, 32], [83, 41, 13.5, 32]],
+  piled:    [[68, 42, 20, 22], [71, 46, 20, 22], [74, 50, 20, 22], [69, 52, 18, 20], [76, 44, 18, 20]],
+  mixed:    [[6, 12, 30, 34], [71, 46, 20, 22], [22, 26, 28, 30], [69, 52, 18, 20], [76, 44, 18, 20]],
+};
+const story = [
+  { frame: "arranged", monitor: true,  caption: "Your layout: code and browser on the monitor, chat and calendar on the laptop.", button: "Unplug the monitor" },
+  { frame: "piled",    monitor: false, caption: "Everything piles onto the laptop screen.", button: "Plug it back in" },
+  { frame: "mixed",    monitor: true,  caption: "Some windows come back, some stay, sizes drift.", button: "Arrange" },
+];
+const wins = document.querySelectorAll("#stage .win");
+let step = 0;
+function show() {
+  const s = story[step];
+  frames[s.frame].forEach(([l, t, w, h], i) => Object.assign(wins[i].style, { left: l + "%", top: t + "%", width: w + "%", height: h + "%" }));
+  document.getElementById("monitor").classList.toggle("gone", !s.monitor);
+  document.getElementById("caption").textContent = s.caption;
+  document.getElementById("next").textContent = s.button;
+}
+document.getElementById("next").addEventListener("click", () => { step = (step + 1) % story.length; show(); });
+show();
+</script>
+</body>
+</html>

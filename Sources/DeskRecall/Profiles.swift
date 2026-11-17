@@ -11,6 +11,10 @@ struct SavedWindow: Codable, Hashable {
     var space: Int            // 1-based desktop position on that display; 0 = don't care
     var fx: Double, fy: Double, fw: Double, fh: Double
     var minimized: Bool?      // optional so profiles saved before this was recorded still load
+    // What identifies the window beyond its title. All optional: older profiles have none of it.
+    var windowID: UInt32?     // the same window for as long as it stays open (ids restart at login)
+    var pid: Int32?           // ...and only within the same run of its app, which makes the id trustworthy
+    var document: String?     // the file or URL the window shows, for apps that report one
 
     var isMinimized: Bool { minimized == true }
 
@@ -30,6 +34,24 @@ struct Profile: Codable, Identifiable {
 
     var setKey: String { Displays.setKey(displays) }
 
+    /// nil when the profile was not saved on the monitors connected now. Otherwise how sure it is
+    /// that these are the very same units, which picks between profiles saved on look-alike setups
+    /// (the same monitor model at home and at the office).
+    /// ponytail: a plain point count; if two places share model, date, macOS id and arrangement
+    /// they cannot be told apart and the profile last used wins.
+    func closeness(to current: [DisplayInfo]) -> Int? {
+        guard setKey == Displays.setKey(current) else { return nil }
+        var score = 0
+        for (i, now) in Displays.pair(displays, with: current) {
+            let then = displays[i]
+            if let a = then.made, let b = now.made, a != b { return nil }    // same model, another unit
+            if then.uuid == now.uuid { score += 2 }                          // macOS recognises the monitor
+            if then.bounds == now.bounds { score += 1 }                      // same arrangement and resolution
+        }
+        return score
+    }
+    func fits(_ current: [DisplayInfo]) -> Bool { closeness(to: current) != nil }
+
     /// Records where every open window is right now, minimized ones included.
     static func snapshot(name: String, displays: [DisplayInfo], windows: [LiveWindow], spaces: [String: [UInt64]]) -> Profile {
         let saved = windows.compactMap { w -> SavedWindow? in
@@ -46,7 +68,7 @@ struct Profile: Codable, Identifiable {
             return SavedWindow(bundleID: w.bundleID, appName: w.appName, title: w.title, display: index, space: position,
                                fx: (w.frame.minX - Double(d.x)) / Double(d.width), fy: (w.frame.minY - Double(d.y)) / Double(d.height),
                                fw: w.frame.width / Double(d.width), fh: w.frame.height / Double(d.height),
-                               minimized: w.minimized ? true : nil)
+                               minimized: w.minimized ? true : nil, windowID: w.id, pid: w.pid, document: w.document)
         }
         return Profile(name: name, displays: displays, windows: saved)
     }
