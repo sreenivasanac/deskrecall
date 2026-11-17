@@ -32,6 +32,14 @@ if args.contains("--selfcheck") {
     precondition(!window.isMinimized && window.space == 2, "old profiles decode, not minimized")
     precondition(DisplayInfo(name: "T", vendor: 1, model: 2, serial: 3, builtin: false, uuid: "x", x: 0, y: 0, width: 2560, height: 1440).hardwareKey == display.hardwareKey,
                  "a monitor is the same monitor at another resolution")
+
+    // "Displays have separate Spaces" off: one desktop spans both displays, so the frame must pick the display.
+    let onSecond = LiveWindow(element: AXUIElementCreateSystemWide(), id: 1, bundleID: "b", appName: "a", title: "t",
+                              frame: CGRect(x: 100, y: 100, width: 400, height: 300), spaces: [5], minimized: false)
+    let shared = Profile.snapshot(name: "s", displays: [display, other], windows: [onSecond], spaces: ["u": [4, 5], "v": [4, 5]])
+    precondition(shared.windows[0].display == 1 && shared.windows[0].space == 2, "a shared desktop leaves the display to the window's frame")
+    let own = Profile.snapshot(name: "o", displays: [display, other], windows: [onSecond], spaces: ["u": [4, 5], "v": [6]])
+    precondition(own.windows[0].display == 0 && own.windows[0].space == 2, "a desktop of one display decides the display")
     print("selfcheck ok")
     exit(0)
 }
@@ -52,9 +60,9 @@ if args.contains("--dump") {
 //   open -W -n --env TYPESAFE_API_KEY=... -a DeskRecall --args --store-key
 if args.contains("--store-key") {
     guard let key = ProcessInfo.processInfo.environment["TYPESAFE_API_KEY"], !key.isEmpty else { print("TYPESAFE_API_KEY is not set"); exit(1) }
-    Jev.apiKey = key
-    print("stored")
-    exit(0)
+    let stored = Jev.store(key)
+    print(stored ? "stored" : "the keychain refused the key")
+    exit(stored ? 0 : 1)
 }
 
 // `--move <windowID> <spaceID>` and `--minimize <windowID> <true|false>`: one low-level step on
@@ -110,9 +118,11 @@ if let path = value(after: "--shot") {
 
 // `--save <name>` and `--arrange`: the two menu actions without the menu (never show dialogs).
 if let name = value(after: "--save") {
+    // Without the permission no window can be read, and saving that would replace a real profile with an empty one.
+    guard Windows.trusted else { print("not saved: needs Accessibility permission"); exit(1) }
     let profile = Profile.snapshot(name: name, displays: Displays.current(), windows: Windows.capture(), spaces: Spaces.userSpaces())
-    Store.save(Store.load().filter { $0.name != name } + [profile])
-    print("saved \(name): \(profile.windows.count) windows (accessibility trusted: \(Windows.trusted))")
+    guard Store.save(Store.load().filter { $0.name != name } + [profile]) else { print("not saved: couldn't write \(Config.profilesURL.path)"); exit(1) }
+    print("saved \(name): \(profile.windows.count) windows")
     exit(0)
 }
 if args.contains("--arrange") {

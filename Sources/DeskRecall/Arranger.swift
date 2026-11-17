@@ -33,6 +33,8 @@ enum Arranger {
     static func arrange(interactive: Bool, forced: Profile? = nil) async -> Outcome {
         guard Windows.trusted else { return Outcome(summary: "Needs Accessibility permission") }
         let displays = Displays.current()
+        // Lid closed or every display asleep, as can happen mid-change: nothing to arrange onto.
+        guard !displays.isEmpty else { return Outcome(summary: "No displays connected") }
         let profiles = Store.load()
         guard !profiles.isEmpty else { return Outcome(summary: "No profiles saved yet") }
         let live = Windows.capture()
@@ -218,7 +220,10 @@ enum Arranger {
                     notes.append("\(unsure.count) uncertain window(s) left alone")
                 }
             } else {
+                // Nobody to ask (auto-arrange, or asking is switched off): the best guess beats leaving
+                // the window wherever a display change dropped it. It always lands in a slot of its own app.
                 pairs.append(contentsOf: unsure.map { ($0.live, $0.slot) })
+                notes.append("\(unsure.count) window(s) placed by best guess")
             }
         }
         return (displayMap, pairs, notes)

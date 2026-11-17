@@ -105,11 +105,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     /// Every change to the saved profiles goes through here: read from disk, change, write, republish.
-    private func edit(_ change: (inout [Profile]) -> Void) {
+    /// False, with the reason as the status, when the file could not be written.
+    @discardableResult
+    private func edit(_ change: (inout [Profile]) -> Void) -> Bool {
         var all = Store.load()
         change(&all)
-        Store.save(all)
+        let saved = Store.save(all)
         refresh()
+        if !saved { finish("Couldn't write \(Config.profilesURL.lastPathComponent); nothing was changed", ok: false) }
+        return saved
     }
 
     /// False, after pointing at the permission banner, while Accessibility is not granted.
@@ -231,7 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                                    value: suggested) else { return }
         if let existing = profiles.first(where: { $0.name == name }) { return update(existing) }   // same name: replace, after asking
         let profile = snapshot(named: name)
-        edit { $0.append(profile) }
+        guard edit({ $0.append(profile) }) else { return }
         Store.prefer(profile)
         finish("Saved “\(name)” (\(profile.windows.count) windows)", ok: true)
     }
@@ -244,7 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                          "Its \(old.windows.count) saved windows are replaced by where your windows are now." + moved, ok: "Update") else { return }
         var fresh = snapshot(named: old.name)
         fresh.id = old.id
-        edit { all in if let i = all.firstIndex(where: { $0.id == old.id }) { all[i] = fresh } }
+        guard edit({ all in if let i = all.firstIndex(where: { $0.id == old.id }) { all[i] = fresh } }) else { return }
         Store.prefer(fresh)
         finish("Updated “\(old.name)” (\(fresh.windows.count) windows)", ok: true)
     }
@@ -261,7 +265,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private func setJevKey() {
         guard let key = UI.prompt("TypeSafe Jev API key", "Stored in your login keychain and sent only to \(Config.jevEndpoint.host ?? "TypeSafe").", secure: true) else { return }
-        Jev.apiKey = key
+        guard Jev.store(key) else {
+            _ = UI.confirm("Couldn't save the Jev key", "The login keychain refused it. Unlock the keychain and try again.", cancel: nil)
+            return
+        }
         Task {   // one tiny request to confirm the key works
             do {
                 _ = try await Jev.ask(state: "ping", questions: ["ok": Jev.noul("Is this text the word ping?")])

@@ -33,8 +33,10 @@ struct Profile: Codable, Identifiable {
     /// Records where every open window is right now, minimized ones included.
     static func snapshot(name: String, displays: [DisplayInfo], windows: [LiveWindow], spaces: [String: [UInt64]]) -> Profile {
         let saved = windows.compactMap { w -> SavedWindow? in
-            // The Space decides the display when known; otherwise the display holding most of the window.
-            var index = displays.firstIndex { d in w.spaces.count == 1 && (spaces[d.uuid] ?? []).contains(w.spaces[0]) }
+            // The desktop decides the display when it belongs to exactly one (desktops are shared when
+            // "Displays have separate Spaces" is off); otherwise the display holding most of the window.
+            let owners = displays.indices.filter { w.spaces.count == 1 && (spaces[displays[$0].uuid] ?? []).contains(w.spaces[0]) }
+            var index = owners.count == 1 ? owners[0] : nil
             if index == nil {
                 index = displays.indices.max { area(w.frame, displays[$0].bounds) < area(w.frame, displays[$1].bounds) }
             }
@@ -67,10 +69,12 @@ enum Store {
         return []
     }
 
-    static func save(_ profiles: [Profile]) {
+    /// False when the file could not be written; the previous file is then untouched (atomic write).
+    @discardableResult
+    static func save(_ profiles: [Profile]) -> Bool {
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try? encoder.encode(profiles).write(to: Config.profilesURL, options: .atomic)
+        return (try? encoder.encode(profiles).write(to: Config.profilesURL, options: .atomic)) != nil
     }
 
     /// Several profiles can be saved on the same monitors (say "Work" and "Evening"). Arrange then

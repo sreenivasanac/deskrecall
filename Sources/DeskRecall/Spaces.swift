@@ -19,6 +19,10 @@ enum Spaces {
     private static let displaySpaces = symbol("SLSCopyManagedDisplaySpaces", as: DisplaySpaces.self)
     private static let spacesForWindows = symbol("SLSCopySpacesForWindows", as: SpacesForWindows.self)
 
+    /// False when this macOS no longer answers "which desktops is this window on". Callers then
+    /// keep working without desktops rather than treating every window as shown nowhere.
+    static var available: Bool { connection != nil && spacesForWindows != nil }
+
     /// Ordinary desktops per display UUID, in Mission Control order (fullscreen-app Spaces left out).
     /// Index + 1 is the "Desktop N" position on that display.
     static func userSpaces() -> [String: [UInt64]] {
@@ -26,12 +30,13 @@ enum Spaces {
               let displays = displaySpaces(connection())?.takeRetainedValue() as? [[String: Any]] else { return [:] }
         var result: [String: [UInt64]] = [:]
         for display in displays {
-            guard var id = display["Display Identifier"] as? String,
+            guard let id = display["Display Identifier"] as? String,
                   let spaces = display["Spaces"] as? [[String: Any]] else { continue }
-            // With "Displays have separate Spaces" off, SkyLight reports a single display called "Main".
-            if id == "Main", let main = Displays.current().first(where: { $0.x == 0 && $0.y == 0 }) { id = main.uuid }
-            result[id] = spaces.filter { ($0["type"] as? Int) == 0 }
+            let desktops = spaces.filter { ($0["type"] as? Int) == 0 }
                 .compactMap { ($0["ManagedSpaceID"] as? NSNumber)?.uint64Value }
+            // With "Displays have separate Spaces" off, SkyLight reports a single display called "Main":
+            // one row of desktops that spans every display.
+            if id == "Main" { for d in Displays.current() { result[d.uuid] = desktops } } else { result[id] = desktops }
         }
         return result
     }

@@ -69,6 +69,8 @@ enum Windows {
             guard let bundleID = app.bundleIdentifier, bundleID != Config.bundleID else { continue }
             let pid = app.processIdentifier
             let appEl = AXUIElementCreateApplication(pid)
+            // Covers only the window-list read below, so a hung app costs a second there. Its window
+            // elements keep the system default; the hidden-Space scan stops at its deadline after one slow answer.
             AXUIElementSetMessagingTimeout(appEl, 1)
             let visible: [AXUIElement] = attr(appEl, kAXWindowsAttribute) ?? []
             var seen = Set<CGWindowID>()
@@ -81,8 +83,9 @@ enum Windows {
                 let spaces = Spaces.of(id)      // empty = not shown on any desktop (hidden helper windows)
                 if debug { print("  ax \(id) [\(app.localizedName ?? "")] subrole=\(subrole ?? "-") min=\(minimized) full=\(fullscreen) spaces=\(spaces)") }
                 // Some apps (Safari, Muse) report an ordinary window as a dialog while it sits in the Dock.
-                guard subrole == kAXStandardWindowSubrole || (minimized && subrole == kAXDialogSubrole), !fullscreen, !spaces.isEmpty,
-                      let frame = frame(of: el) else { continue }
+                // "On no desktop" only means a hidden helper window while desktops can be read at all.
+                guard subrole == kAXStandardWindowSubrole || (minimized && subrole == kAXDialogSubrole), !fullscreen,
+                      !spaces.isEmpty || !Spaces.available, let frame = frame(of: el) else { continue }
                 result.append(LiveWindow(element: el, id: id, bundleID: bundleID, appName: app.localizedName ?? bundleID,
                                          title: attr(el, kAXTitleAttribute) ?? "", frame: frame, spaces: spaces, minimized: minimized))
             }

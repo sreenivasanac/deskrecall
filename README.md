@@ -40,7 +40,9 @@ confidence:
 
 Low-confidence answers are treated as conflicts: Arrange shows one dialog with its best guess
 preselected and lets you correct it. After arranging from a merely similar profile, DeskRecall
-offers to save the result as a new profile for this setup. Auto-arrange never guesses unattended.
+offers to save the result as a new profile for this setup. Auto-arrange never picks a profile by
+guesswork: with no clear match it does nothing. For a window it is unsure about it takes the best
+guess, which is always a slot of the same app, and says so in the status line.
 
 Without a Jev key the app still works for exact setups; same-app windows are then paired in window
 order and you pick the profile yourself when it is ambiguous.
@@ -109,6 +111,8 @@ open -W -n --env TYPESAFE_API_KEY=your-key -a DeskRecall --args --store-key
   displays, positions and sizes.
 - Desktops are remembered by position ("third desktop on the built-in display"). DeskRecall doesn't
   create desktops: if a profile needs more than exist, it uses the last one and tells you.
+- With "Displays have separate Spaces" switched off in System Settings, one row of desktops spans
+  every display. The code handles that case but it has not been tested on a real Mac.
 - Full-screen windows are left alone. So are windows that are open but not in the profile.
 - A profile saved by version 0.1 has no minimized information, so every window in it counts as
   "on screen". Press **Update with Current Layout…** once to record it.

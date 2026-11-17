@@ -19,28 +19,29 @@ enum Jev {
     /// Read from the keychain once per launch: the menu asks for it every time it opens.
     private static var stored: String?, loaded = false
     static var apiKey: String? {
-        get {
-            if let env = ProcessInfo.processInfo.environment["TYPESAFE_API_KEY"], !env.isEmpty { return env }
-            if loaded { return stored }
-            let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
-                                        kSecAttrAccount as String: Config.keychainAccount, kSecReturnData as String: true]
-            var out: CFTypeRef?
-            let status = SecItemCopyMatching(query as CFDictionary, &out)
-            // Remember only a definite answer; a keychain that is locked right now is asked again next time.
-            loaded = status == errSecSuccess || status == errSecItemNotFound
-            guard status == errSecSuccess, let data = out as? Data else { return nil }
-            stored = String(data: data, encoding: .utf8)
-            return stored
-        }
-        set {
-            stored = (newValue?.isEmpty ?? true) ? nil : newValue
-            loaded = true
-            let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
-                                       kSecAttrAccount as String: Config.keychainAccount]
-            SecItemDelete(base as CFDictionary)
-            guard let newValue, !newValue.isEmpty else { return }
-            SecItemAdd(base.merging([kSecValueData as String: Data(newValue.utf8)]) { $1 } as CFDictionary, nil)
-        }
+        if let env = ProcessInfo.processInfo.environment["TYPESAFE_API_KEY"], !env.isEmpty { return env }
+        if loaded { return stored }
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
+                                    kSecAttrAccount as String: Config.keychainAccount, kSecReturnData as String: true]
+        var out: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &out)
+        // Remember only a definite answer; a keychain that is locked right now is asked again next time.
+        loaded = status == errSecSuccess || status == errSecItemNotFound
+        guard status == errSecSuccess, let data = out as? Data else { return nil }
+        stored = String(data: data, encoding: .utf8)
+        return stored
+    }
+
+    /// Puts the key in the keychain; false when the keychain refused. Deletes and adds rather than
+    /// updates, so an item first created by another tool ends up owned by this app (no prompts).
+    static func store(_ key: String) -> Bool {
+        let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
+                                   kSecAttrAccount as String: Config.keychainAccount]
+        SecItemDelete(base as CFDictionary)
+        let saved = SecItemAdd(base.merging([kSecValueData as String: Data(key.utf8)]) { $1 } as CFDictionary, nil) == errSecSuccess
+        stored = saved ? key : nil
+        loaded = true
+        return saved
     }
 
     static func choice(_ instructions: String, _ options: [String: String]) -> [String: Any] {
