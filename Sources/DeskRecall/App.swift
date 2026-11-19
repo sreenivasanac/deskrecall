@@ -200,7 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     func setJevKey() {
-        guard let key = UI.prompt("TypeSafe Jev API key", "Stored in your login keychain and sent only to \(Config.jevEndpoint.host ?? "TypeSafe").", secure: true) else { return }
+        guard let key = UI.prompt("TypeSafe Jev API key", "With a key, the names of your displays and the titles of windows \(Config.appName) can't match on its own are sent to \(Config.jevEndpoint.host ?? "TypeSafe") when you arrange. Saving a key is your agreement to that. The key itself stays in your login keychain.", secure: true) else { return }
         guard Jev.store(key) else {
             _ = UI.confirm("Couldn't save the Jev key", "The login keychain refused it. Unlock the keychain and try again.", cancel: nil)
             return

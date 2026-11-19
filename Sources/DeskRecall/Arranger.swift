@@ -262,7 +262,23 @@ enum Arranger {
         for w in restoring { Windows.setMinimized(w.element, false); changed.insert(w.id) }
         if !restoring.isEmpty { try? await Task.sleep(nanoseconds: Config.minimizeSettle) }
 
-        let desktopsByDisplay = Spaces.userSpaces()
+        // A profile can use more desktops than a display has now: add the missing ones first.
+        var desktopsByDisplay = Spaces.userSpaces()
+        var wanted: [String: Int] = [:]
+        for (_, s) in pairs {
+            guard let display = displayMap[profile.windows[s].display] else { continue }
+            wanted[display.uuid] = max(wanted[display.uuid] ?? 0, profile.windows[s].space)
+        }
+        let before = desktopsByDisplay.values.map(\.count).reduce(0, +)
+        for (uuid, count) in wanted {
+            guard let have = desktopsByDisplay[uuid]?.count, have > 0, count > have else { continue }
+            _ = await Spaces.addDesktops(count - have, displayUUID: uuid)
+        }
+        // Count what is really there now: adding can stop part of the way.
+        desktopsByDisplay = Spaces.userSpaces()
+        let added = desktopsByDisplay.values.map(\.count).reduce(0, +) - before
+        if added > 0 { notes.append("added \(added) desktop\(added == 1 ? "" : "s")") }
+
         var moves: [UInt64: [CGWindowID]] = [:]
         var toDock: [LiveWindow] = []
         var missingDesktops = false
@@ -287,7 +303,7 @@ enum Arranger {
             if stuck > 0 { notes.append("\(stuck) window(s) could not change desktop") }
         }
         for w in toDock { Windows.setMinimized(w.element, true) }
-        if missingDesktops { notes.append("the profile uses more desktops than exist now; add some in Mission Control") }
+        if missingDesktops { notes.append("the profile uses more desktops than exist and they could not be added; add some in Mission Control") }
         return (changed.count, notes)
     }
 

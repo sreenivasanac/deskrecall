@@ -126,9 +126,8 @@ can't settle are paired in window order, and you pick the profile yourself when 
 
 1. Download [DeskRecall.zip](https://github.com/sreenivasanac/deskrecall/releases/latest/download/DeskRecall.zip),
    unzip it and move **DeskRecall** to your Applications folder.
-2. Open it. The app is not notarized by Apple, so macOS blocks the first launch: open
-   **System Settings → Privacy & Security**, scroll to *Security* and click **Open Anyway**.
-   (Or run `xattr -dr com.apple.quarantine /Applications/DeskRecall.app` once.)
+2. Open it. The app is signed with a Developer ID and notarized by Apple, so macOS opens it
+   after the usual "downloaded from the internet" confirmation.
 3. Grant **Accessibility** when asked (System Settings → Privacy & Security → Accessibility). It is
    the only permission the app uses; it is what lets it read window titles and move windows.
 4. Lay out your windows, then choose **Save Layout as New Profile…** from the menu bar icon.
@@ -156,8 +155,9 @@ scripts/build-app.sh
 ```
 
 This builds `DeskRecall.app`, signs it, installs it to `/Applications` and launches it. The script
-uses the first code-signing identity in your keychain so the Accessibility grant survives rebuilds;
-with none, it signs ad hoc and macOS asks again after each rebuild.
+uses a Developer ID certificate if your keychain has one, else the first code-signing identity, so
+the Accessibility grant survives rebuilds; with none, it signs ad hoc and macOS asks again after
+each rebuild. `RELEASE=1` also notarizes and staples when a Developer ID certificate is present.
 
 ## Menu
 
@@ -181,7 +181,8 @@ open -W -n -a DeskRecall --args --arrange --out /tmp/deskrecall.txt
 the app sees them), `--selfcheck` (logic tests; runs straight from `.build/debug/DeskRecall`).
 
 For checking what a macOS release still allows, one step on one window (ids from `--dump`):
-`--move WINDOW SPACE`, `--minimize WINDOW true|false`. For screenshots: `--shot FILE.png [--pane Settings]`
+`--move WINDOW SPACE`, `--minimize WINDOW true|false`, `--frame WINDOW X Y WIDTH HEIGHT`,
+`--add-desktop DISPLAY`, `--remove-desktop DISPLAY`. `--save NAME --app BUNDLEID` saves only one app's windows. For screenshots: `--shot FILE.png [--pane Settings]`
 renders the window to an image without showing it, `--show Profiles|Settings [--light]` opens the real one.
 
 The Jev key can also come from a `TYPESAFE_API_KEY` environment variable, which wins over the
@@ -192,20 +193,41 @@ another tool, such as `security`, makes macOS prompt on every read):
 open -W -n --env TYPESAFE_API_KEY=your-key -a DeskRecall --args --store-key
 ```
 
+## Tests
+
+`--selfcheck` covers the pure logic. The live tests drive the installed app against real windows:
+
+```bash
+uv run python scripts/live-test.py              # every case the connected displays allow
+uv run python scripts/live-test.py frame dock   # only the named cases
+```
+
+They open three TextEdit windows, save a layout, disturb it, run Arrange and check that every window
+is back. Cases: `frame` (moved and resized), `restore` (minimized now, on screen in the profile),
+`dock` (minimized in the profile), `desktop` (wrong desktop, including one not showing),
+`desktop-dock` (minimized and on the wrong desktop), `display` (wrong display), `new-desktop` (the
+profile's desktop no longer exists and is added), `reopened` (closed and opened again, so the window
+ids changed). Cases that need a second desktop or display are skipped without one, so run the tests
+once on each setup you use. Your profiles and settings are put back afterwards; TextEdit must be
+closed before you start.
+
 ## Limits
 
 - Desktops (Spaces) are handled through Apple's private SkyLight framework because no public API
   exists. That rules out the Mac App Store, and a future macOS could break it; the app then still
   restores displays, positions and sizes.
-- Desktops are remembered by position ("third desktop on the built-in display"). DeskRecall doesn't
-  create desktops: if a profile needs more than exist, it uses the last one and tells you.
+- Desktops are remembered by position ("third desktop on the built-in display"). If a profile needs
+  more desktops than a display has, DeskRecall adds them by opening Mission Control and pressing its
+  "+" button for you, so Mission Control shows for about a second. If that fails it uses the last
+  desktop and tells you.
 - Two monitors of one model with the same serial, the same manufacture date, the same macOS
   identifier and the same arrangement cannot be told apart. The profile last used wins; switch with
   **Apply Profile ▸**.
 - The browser-profile rule covers Chromium browsers. Safari, Firefox and Edge name profiles
   differently or not at all; their windows fall through to title matching and Jev.
-- The Jev key lives in your login keychain. Because the app is not notarized, macOS may ask for
-  your keychain password once after you install a new version, the first time the key is needed.
+- The Jev key lives in your login keychain. If you used a version before 0.4, macOS asks for your
+  keychain password once, the first time the key is needed, because the app's signature changed;
+  it also asks you to grant Accessibility again.
 - With "Displays have separate Spaces" switched off in System Settings, one row of desktops spans
   every display. The code handles that case but it has not been tested on a real Mac.
 - Full-screen windows are left alone. So are windows that are open but not in the profile.

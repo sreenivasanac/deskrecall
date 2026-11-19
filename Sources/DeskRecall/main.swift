@@ -67,7 +67,7 @@ if args.contains("--dump") {
     let spaces = Spaces.userSpaces()
     Windows.debug = args.contains("--verbose")
     print("accessibility trusted:", Windows.trusted, "visible desktops:", Spaces.visible().sorted())
-    for d in Displays.current() { print("display \(d.summary) key=\(d.hardwareKey) desktops=\(spaces[d.uuid] ?? [])") }
+    for (i, d) in Displays.current().enumerated() { print("display \(i) \(d.summary) key=\(d.hardwareKey) desktops=\(spaces[d.uuid] ?? [])") }
     for w in Windows.capture() {
         print("window \(w.id) [\(w.appName)] \"\(w.title.prefix(40))\" frame=\(w.frame.integral) spaces=\(w.spaces)\(w.minimized ? " minimized" : "")")
     }
@@ -103,8 +103,30 @@ if let i = args.firstIndex(of: "--minimize"), args.count > i + 2, let id = CGWin
     report(id)
 }
 
+// `--frame <windowID> <x> <y> <width> <height>`: move and resize one window.
+if let i = args.firstIndex(of: "--frame"), args.count > i + 5, let id = CGWindowID(args[i + 1]) {
+    let n = args[(i + 2)...(i + 5)].compactMap(Double.init)
+    guard n.count == 4, let window = Windows.capture().first(where: { $0.id == id }) else { print("no such window, or a number is missing"); exit(1) }
+    Windows.setFrame(window.element, CGRect(x: n[0], y: n[1], width: n[2], height: n[3]))
+    report(id)
+}
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
+
+// `--add-desktop <n>` / `--remove-desktop <n>`: add or remove the last desktop on display n (as numbered by --dump, from 0).
+for (flag, add) in [("--add-desktop", true), ("--remove-desktop", false)] {
+    guard let index = value(after: flag).flatMap(Int.init) else { continue }
+    Task { @MainActor in
+        let displays = Displays.current()
+        guard displays.indices.contains(index) else { print("no display \(index)"); exit(1) }
+        let uuid = displays[index].uuid
+        let done = add ? await Spaces.addDesktops(1, displayUUID: uuid) : await Spaces.removeLastDesktop(displayUUID: uuid)
+        print(done ? "ok: desktops now \(Spaces.userSpaces()[uuid] ?? [])" : "failed: Mission Control's controls were not found")
+        exit(done ? 0 : 1)
+    }
+    app.run()
+}
 
 // `--shot <png> [--pane Settings]`: print the menu and draw the window into an image, without showing either, to check the UI.
 if let path = value(after: "--shot") {
@@ -139,7 +161,9 @@ if let path = value(after: "--shot") {
 if let name = value(after: "--save") {
     // Without the permission no window can be read, and saving that would replace a real profile with an empty one.
     guard Windows.trusted else { print("not saved: needs Accessibility permission"); exit(1) }
-    let profile = Profile.snapshot(name: name, displays: Displays.current(), windows: Windows.capture(), spaces: Spaces.userSpaces())
+    let only = value(after: "--app")     // `--app BUNDLEID`: just that app's windows, for a profile that leaves everything else alone
+    let profile = Profile.snapshot(name: name, displays: Displays.current(), windows: Windows.capture().filter { only == nil || $0.bundleID == only },
+                                   spaces: Spaces.userSpaces())
     guard Store.save(Store.load().filter { $0.name != name } + [profile]) else { print("not saved: couldn't write \(Config.profilesURL.path)"); exit(1) }
     print("saved \(name): \(profile.windows.count) windows")
     exit(0)
