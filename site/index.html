@@ -129,6 +129,8 @@
     html { scroll-behavior: auto; }
   }
 </style>
+<!-- Anonymous visit counts (self-hosted Umami, no cookies), served first-party at /u/ by nginx. Only reports from the live site. -->
+<script defer src="/u/p.js" data-website-id="f2ec77ff-fae8-4cc4-9c57-7802dd919683" data-domains="deskrecall.pragnyalabs.com"></script>
 </head>
 <body>
 <div class="wrap">
@@ -139,7 +141,7 @@
       <a class="optional" href="#differs">How it differs</a>
       <a class="optional" href="#works">How it works</a>
       <a href="#install">Install</a>
-      <a href="https://github.com/sreenivasanac/deskrecall">GitHub</a>
+      <a data-umami-event="github" href="https://github.com/sreenivasanac/deskrecall">GitHub</a>
     </nav>
   </header>
 
@@ -149,8 +151,8 @@
         <h1>Every window back where it belongs.</h1>
         <p class="lead">DeskRecall is a macOS menu bar app that restores your window layout for whichever displays are connected: the right display, the right desktop, the right size, minimized or not.</p>
         <div class="actions">
-          <a class="button" href="https://github.com/sreenivasanac/deskrecall/releases/latest/download/DeskRecall.zip">Download for macOS</a>
-          <a href="https://github.com/sreenivasanac/deskrecall">Read the source on GitHub</a>
+          <a class="button" data-umami-event="download" href="https://github.com/sreenivasanac/deskrecall/releases/latest/download/DeskRecall.zip">Download for macOS</a>
+          <a data-umami-event="github" href="https://github.com/sreenivasanac/deskrecall">Read the source on GitHub</a>
         </div>
         <p class="fine">Free. macOS 14 or later, Apple Silicon and Intel. Signed and notarized by Apple.</p>
       </div>
@@ -244,7 +246,7 @@
       <div class="install">
         <div>
           <ol>
-            <li><a href="https://github.com/sreenivasanac/deskrecall/releases/latest/download/DeskRecall.zip">Download DeskRecall.zip</a>, unzip it and move DeskRecall to your Applications folder.</li>
+            <li><a data-umami-event="download" href="https://github.com/sreenivasanac/deskrecall/releases/latest/download/DeskRecall.zip">Download DeskRecall.zip</a>, unzip it and move DeskRecall to your Applications folder.</li>
             <li>Open it. The app is signed with a Developer ID and notarized by Apple, so macOS opens it after the usual confirmation for a downloaded app.</li>
             <li>Grant <strong>Accessibility</strong> when asked. It is the only permission the app uses; it lets it read window titles and move windows.</li>
             <li>Arrange your windows, click the menu bar icon and choose <strong>Save Layout as New Profile…</strong>. Do this once per display setup.</li>
@@ -272,7 +274,7 @@ scripts/build-app.sh</pre>
   </main>
 
   <footer>
-    <span>DeskRecall, a Pragnya Labs project.</span>
+    <span>DeskRecall, a Pragnya Labs project. This page counts visits anonymously, without cookies.</span>
     <span><a href="https://github.com/sreenivasanac/deskrecall">Source</a> &nbsp; <a href="https://github.com/sreenivasanac/deskrecall/releases">Releases</a> &nbsp; <a href="https://github.com/sreenivasanac/deskrecall/issues">Report a problem</a></span>
   </footer>
 </div>
