@@ -58,6 +58,22 @@ if args.contains("--selfcheck") {
     precondition(Matching.family("c", "Google Chrome", "Inbox - Google Chrome - Work") != Matching.family("c", "Google Chrome", "News - Google Chrome - Personal")
                  && Matching.family("c", "Google Chrome", "Inbox - Google Chrome - Work") == Matching.family("c", "Google Chrome", "Docs - Google Chrome - Work")
                  && Matching.family("s", "Safari", "A - B") == Matching.family("s", "Safari", "C"), "browser profiles keep to themselves")
+    // Reusing a layout on other monitors: the same unit first, then the same kind.
+    var laptop = other; laptop.x = 1920
+    let hotDesk = DisplayInfo(name: "D", vendor: 5, model: 6, serial: 7, builtin: false, uuid: "d", x: 0, y: 0, width: 2560, height: 1440)
+    let swapped = Matching.standIns(for: [display, laptop], among: [other, hotDesk])
+    precondition(swapped.map == [0: 1, 1: 0], "external stands in for external, built-in for built-in, whatever the order")
+    precondition(Matching.standIns(for: [display, laptop], among: [other]).map == [0: 0, 1: 0], "one display left: it takes everything")
+    precondition(Matching.standIns(for: [display, laptop], among: [display, other]).score > swapped.score
+                 && swapped.score > Matching.standIns(for: [display, laptop], among: [other]).score, "the same monitors fit best, the same shape next")
+
+    // Reopened windows: shared title words decide, and only when one pairing stands clear.
+    func title(_ a: String, _ b: String) -> Double { Matching.overlap(Matching.words(a), Matching.words(b)) }
+    let reopened = [(live: 1, slot: 10, p: title("App.swift — deskrecall", "main.swift — deskrecall")), (live: 1, slot: 11, p: title("App.swift — deskrecall", "index.ts — website")),
+                    (live: 2, slot: 10, p: title("page.tsx — website", "main.swift — deskrecall")), (live: 2, slot: 11, p: title("page.tsx — website", "index.ts — website"))]
+    precondition(Matching.settle(reopened, floor: 0.2, margin: 0.1).sure == [1: 10, 2: 11], "windows follow their project")
+    let twins = Matching.settle([(live: 1, slot: 10, p: 0), (live: 1, slot: 11, p: 0), (live: 2, slot: 10, p: 0), (live: 2, slot: 11, p: 0)], floor: 0.2, margin: 0.1)
+    precondition(twins.sure.isEmpty && twins.unsure.count == 2, "nothing to go on: a guess, never a certainty")
     print("selfcheck ok")
     exit(0)
 }
@@ -170,6 +186,7 @@ if let name = value(after: "--save") {
 }
 // `--moved <name>`: how many of that profile's windows are not where it has them (what the menu reports).
 if let name = value(after: "--moved") {
+    guard Windows.trusted else { print("unknown: needs Accessibility permission"); exit(1) }    // no window can be read: 0 would be a lie
     guard let profile = Store.load().first(where: { $0.name == name }) else { print("no such profile"); exit(1) }
     print("moved", MainActor.assumeIsolated { Arranger.moved(from: profile, displays: Displays.current(), live: Windows.capture()) })
     exit(0)

@@ -14,6 +14,51 @@ enum Matching {
         return result
     }
 
+    /// How alike two monitors are, for reusing a layout on a setup it was not saved on: the same
+    /// unit, then another unit of the model, then the same kind (built-in or external) and resolution.
+    static func alike(_ a: DisplayInfo, _ b: DisplayInfo) -> Double {
+        var score = 0.0
+        if a.hardwareKey == b.hardwareKey { score += 8 } else if a.vendor == b.vendor && a.model == b.model && a.builtin == b.builtin { score += 4 }
+        if a.builtin == b.builtin { score += 2 }
+        if a.width == b.width && a.height == b.height { score += 1 }
+        return score
+    }
+
+    /// Which connected display (index) stands in for each saved one, and how well the whole setup
+    /// fits. One for one while they last; with fewer displays now, the rest share the most alike.
+    /// Both lists run left to right, which settles ties.
+    static func standIns(for saved: [DisplayInfo], among current: [DisplayInfo]) -> (map: [Int: Int], score: Double) {
+        guard !current.isEmpty else { return ([:], 0) }
+        func p(_ i: Int, _ j: Int) -> Double { alike(saved[i], current[j]) - 0.01 * Double(abs(i - j)) }
+        var map = assign(saved.indices.flatMap { i in current.indices.map { (live: i, slot: $0, p: p(i, $0)) } })
+        let score = map.reduce(0) { $0 + alike(saved[$1.key], current[$1.value]) } - 3 * Double(abs(saved.count - current.count))
+        for i in saved.indices where map[i] == nil { map[i] = current.indices.max { p(i, $0) < p(i, $1) } }
+        return (map, score)
+    }
+
+    /// The words of a window title, for comparing titles that have changed since the save.
+    static func words(_ title: String) -> Set<String> {
+        Set(title.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init))
+    }
+
+    /// 0 to 1: how many of two titles' words are shared.
+    static func overlap(_ a: Set<String>, _ b: Set<String>) -> Double {
+        let all = a.union(b).count
+        return all == 0 ? 0 : Double(a.intersection(b).count) / Double(all)
+    }
+
+    /// `assign`, split into the pairs that stand clear of every rival (another slot for the same
+    /// window, another window for the same slot) and the ones that are only the best guess.
+    static func settle(_ scored: [(live: Int, slot: Int, p: Double)], floor: Double, margin: Double) -> (sure: [Int: Int], unsure: [Int: Int]) {
+        var sure: [Int: Int] = [:], unsure: [Int: Int] = [:]
+        for (l, s) in assign(scored) {
+            let p = scored.first { $0.live == l && $0.slot == s }?.p ?? 0
+            let rival = scored.filter { ($0.live == l) != ($0.slot == s) }.map(\.p).max() ?? 0
+            if p >= floor && p - rival >= margin { sure[l] = s } else { unsure[l] = s }
+        }
+        return (sure, unsure)
+    }
+
     /// The group a window is matched within: its app, and for Chromium browsers its profile, which
     /// they put at the end of the title ("Inbox - Google Chrome - Work"). A window never changes profile.
     /// ponytail: other browsers name the profile elsewhere or not at all; those are left to Jev.
@@ -24,8 +69,8 @@ enum Matching {
 }
 
 /// The Arrange button, in three stages: pick the profile for the connected displays, decide which
-/// open window fills which saved slot, then move everything. Identity cases (same monitors, same
-/// title, one window for one slot) are decided locally; every judgement call is a question to Jev.
+/// open window fills which saved slot, then move everything. All of it is decided on the Mac. Jev,
+/// when a key is saved, is asked only about reopened windows the rules cannot tell apart.
 @MainActor
 enum Arranger {
     struct Outcome {
@@ -53,10 +98,9 @@ enum Arranger {
         let same = Store.candidates(profiles, for: displays)
         var chosen = forced ?? Store.current(profiles, for: displays)
         if chosen == nil {
-            let pick = await chooseProfile(among: same.isEmpty ? profiles : same, displays: displays, live: live, interactive: interactive)
+            let pick = chooseProfile(among: same.isEmpty ? profiles : same, displays: displays, interactive: interactive)
             if pick.cancelled { return Outcome(summary: "Arrange cancelled", cancelled: true) }
             chosen = pick.profile
-            if let note = pick.note { notes.append(note) }
         }
         guard let profile = chosen else { return Outcome(summary: "No saved profile fits this display setup") }
         let exact = profile.fits(displays)
@@ -76,47 +120,26 @@ enum Arranger {
 
     // MARK: 1. Profile
 
-    /// No profile was saved on exactly these monitors (or several were, none used yet): ask Jev for the closest.
-    private static func chooseProfile(among candidates: [Profile], displays: [DisplayInfo], live: [LiveWindow], interactive: Bool) async
-        -> (profile: Profile?, note: String?, cancelled: Bool) {
-        var questions = ["close": Jev.noul("Is at least one of saved_profiles made for a display setup similar enough to current_displays (the same monitors, or the same number and kind of displays) that its window layout could reasonably be reused here?")]
-        if candidates.count > 1 {
-            questions["profile"] = Jev.choice("Which saved profile was made for the display setup most similar to current_displays? Weigh, in order: the same physical monitors (vendor, model, serial, manufacture date, name), the same number of displays, resolution, arrangement, and which apps are open now.",
-                Dictionary(uniqueKeysWithValues: candidates.enumerated().map { ("p\($0)", "\($1.name): " + $1.displays.map(\.summary).joined(separator: " + ")) }))
-        }
-        let state: [String: Any] = [
-            "current_displays": displays.map(\.summary),
-            "open_apps": Set(live.map(\.appName)).sorted(),
-            "saved_profiles": Dictionary(uniqueKeysWithValues: candidates.enumerated().map {
-                ("p\($0)", ["name": $1.name, "displays": $1.displays.map(\.summary), "apps": Set($1.windows.map(\.appName)).sorted()] as [String: Any])
-            }),
-        ]
-        var guess = candidates.count == 1 ? 0 : nil as Int?
-        var sure = false
-        var note: String?
-        do {
-            let answers = try await Jev.ask(state: state, questions: questions)
-            let close = (answers["close"]?.yes ?? 0) >= 0.5
-            if candidates.count == 1 {
-                sure = close
-            } else if let a = answers["profile"], let i = a.choice.flatMap({ Int($0.dropFirst()) }), candidates.indices.contains(i) {
-                guess = i
-                sure = close && a.confidence >= Config.jevMinConfidence
-            }
-        } catch Jev.Failure.noKey { note = "no Jev key" } catch { note = "Jev unreachable" }
-
-        if sure, let guess { return (candidates[guess], note, false) }
-        guard interactive else { return (nil, note, false) }                    // never guess a layout unattended
-        if candidates.count == 1 { return (candidates[0], note, false) }        // only one to try; the user is offered a new profile afterwards
+    /// No profile was saved on exactly these monitors (or several were, none used yet): the one whose
+    /// displays are most like these. It is used without asking only when it stands alone and the
+    /// setup has the same shape, the same number of built-in and external displays.
+    private static func chooseProfile(among candidates: [Profile], displays: [DisplayInfo], interactive: Bool) -> (profile: Profile?, cancelled: Bool) {
+        let scores = candidates.map { Matching.standIns(for: $0.displays, among: displays).score }
+        guard let top = scores.max(), let best = scores.firstIndex(of: top) else { return (nil, false) }
+        let saved = candidates[best].displays
+        let sameShape = saved.count == displays.count && saved.filter(\.builtin).count == displays.filter(\.builtin).count
+        if sameShape && scores.filter({ $0 == top }).count == 1 { return (candidates[best], false) }
+        guard interactive else { return (nil, false) }                    // never guess a layout unattended
+        if candidates.count == 1 { return (candidates[0], false) }        // only one to try; the user is offered a new profile afterwards
         let pick = UI.pick("Which profile should be used?", "No saved profile clearly matches the displays connected now.",
-                           options: candidates.map(\.name), selected: guess ?? 0)
-        return (pick.map { candidates[$0] }, note, pick == nil)
+                           options: candidates.map(\.name), selected: best)
+        return (pick.map { candidates[$0] }, pick == nil)
     }
 
     // MARK: 2. Displays and windows
 
     /// Decides which connected display stands in for each saved one and which open window fills
-    /// which saved slot. Everything that needs judgement goes to Jev in one request.
+    /// which saved slot. Reopened windows the rules leave unsure go to Jev in one request, if a key is saved.
     private static func match(_ profile: Profile, displays: [DisplayInfo], live: [LiveWindow], exact: Bool, interactive: Bool) async
         -> (displayMap: [Int: DisplayInfo], pairs: [Pair], notes: [String]) {
         var notes: [String] = []
@@ -126,19 +149,19 @@ enum Arranger {
         var displayMap: [Int: DisplayInfo] = [:]
         if exact {
             displayMap = Displays.pair(profile.displays, with: displays)
-        } else if displays.count == 1 {
-            for i in profile.displays.indices { displayMap[i] = displays[0] }
         } else {
-            let options = Dictionary(uniqueKeysWithValues: displays.enumerated().map { ("c\($0)", $1.summary) })
-            for (i, d) in profile.displays.enumerated() {
-                questions["d\(i)"] = Jev.choice("The saved layout used this display: \(d.summary). Which currently connected display should take its place? Prefer the same kind (built-in for built-in), then the most similar monitor, size and position.", options)
-            }
+            for (i, j) in Matching.standIns(for: profile.displays, among: displays).map { displayMap[i] = displays[j] }
         }
 
-        // Open window -> saved slot: the rules first, then a question to Jev for each group they leave open.
+        // Open window -> saved slot: what identifies a window for certain first. A group that leaves
+        // open is scored by title and place; only where that is still unsure is Jev asked.
         let local = pairLocally(profile, live)
         var pairs = local.pairs
-        let groups = local.groups
+        let desktops = Spaces.userSpaces()
+        let scoredGroups = local.groups.map { group in
+            (group: group, local: Matching.settle(score(group, profile, live, displayMap, desktops), floor: Config.matchFloor, margin: Config.matchMargin))
+        }
+        let groups = scoredGroups.filter { !$0.local.unsure.isEmpty }.map(\.group)    // the ones worth a question
         func open(_ l: Int) -> String { "\"\(live[l].title)\"" + (live[l].minimized ? " (minimized)" : "") }
         for (lives, slots) in groups {
             if slots.count == 1 {   // several windows compete for one slot
@@ -156,28 +179,17 @@ enum Arranger {
         var answers: [String: Jev.Answer] = [:]
         if !questions.isEmpty {
             let state: [String: Any] = [
-                "current_displays": displays.map(\.summary),
                 "saved_profile": profile.name,
-                "saved_displays": profile.displays.map(\.summary),
                 "saved_windows": groups.flatMap(\.slots).map { describe(profile.windows[$0], profile) },
                 "open_windows": groups.flatMap(\.lives).map { "\(live[$0].appName): \(open($0))" },
             ]
             do { answers = try await Jev.ask(state: state, questions: questions) }
-            catch Jev.Failure.noKey { notes.append("no Jev key, so same-app windows were matched in order") }
-            catch { notes.append("Jev unreachable, so same-app windows were matched in order") }
-        }
-
-        for i in profile.displays.indices where displayMap[i] == nil {
-            if let c = answers["d\(i)"]?.choice, let j = Int(c.dropFirst()), displays.indices.contains(j) {
-                displayMap[i] = displays[j]
-            } else {
-                // ponytail: no Jev answer -> built-in to built-in, the rest by position. Fine for 1-2 displays.
-                displayMap[i] = displays.first { $0.builtin == profile.displays[i].builtin } ?? displays[min(i, displays.count - 1)]
-            }
+            catch Jev.Failure.noKey {}      // the usual case: Jev is optional
+            catch { notes.append("Jev unreachable") }
         }
 
         var unsure: [(live: Int, slot: Int, slots: [Int])] = []
-        for group in groups {
+        for (group, local) in scoredGroups {
             var scored: [(live: Int, slot: Int, p: Double)] = []
             var confidence: [Int: Double] = [:]
             if group.slots.count == 1, let a = answers["s\(group.slots[0])"] {
@@ -189,9 +201,9 @@ enum Arranger {
                     for s in group.slots { scored.append((l, s, a.probabilities["s\(s)"] ?? 0)) }
                 }
             }
-            if scored.isEmpty {
-                // ponytail: without Jev, pair same-app windows in window order (what Rectangle Pro does).
-                pairs.append(contentsOf: zip(group.lives, group.slots).map { ($0, $1) })
+            if scored.isEmpty {     // the rules were sure, or there is no answer from Jev: what the Mac worked out itself
+                pairs.append(contentsOf: local.sure.map { ($0.key, $0.value) })
+                unsure.append(contentsOf: local.unsure.sorted { $0.key < $1.key }.map { ($0.key, $0.value, group.slots) })
                 continue
             }
             for (l, s) in Matching.assign(scored) {
@@ -199,7 +211,7 @@ enum Arranger {
             }
         }
 
-        // Conflicts: Jev's low-confidence guesses go to the user, in one dialog.
+        // Conflicts: the best guesses nobody was sure of go to the user, in one dialog.
         if !unsure.isEmpty {
             switch Unsure.current {
             case .guess:
@@ -223,8 +235,30 @@ enum Arranger {
         return (displayMap, pairs, notes)
     }
 
+    /// How well each open window of a group fits each of its saved slots, when nothing identifies
+    /// them for certain (an app quit and reopened, titles since changed). Two signs: the words the
+    /// titles share, leaving out the ones every title in the group has ("Google Chrome"), and whether
+    /// the window already sits where the slot was saved, as it does when macOS reopens an app's windows.
+    /// ponytail: shared words, not meaning; "Pull request #42" and "GitHub" score 0. That is Jev's part.
+    private static func score(_ group: (lives: [Int], slots: [Int]), _ profile: Profile, _ live: [LiveWindow],
+                              _ displayMap: [Int: DisplayInfo], _ desktops: [String: [UInt64]]) -> [(live: Int, slot: Int, p: Double)] {
+        let liveWords = group.lives.map { Matching.words(live[$0].title) }, slotWords = group.slots.map { Matching.words(profile.windows[$0].title) }
+        let everywhere = (liveWords + slotWords).dropFirst().reduce(liveWords.first ?? []) { $0.intersection($1) }
+        var scored: [(live: Int, slot: Int, p: Double)] = []
+        for (a, l) in group.lives.enumerated() {
+            for (b, s) in group.slots.enumerated() {
+                let slot = profile.windows[s]
+                let placed = displayMap[slot.display].map { inPlace(slot, live[l], on: $0, desktops: desktops) } ?? false
+                // The last term only orders ties: first open window to first saved one.
+                scored.append((l, s, Config.titleWeight * Matching.overlap(liveWords[a].subtracting(everywhere), slotWords[b].subtracting(everywhere))
+                                     + (placed ? Config.placeWeight : 0) - 0.001 * Double(abs(a - b))))
+            }
+        }
+        return scored
+    }
+
     /// The pairs the rules settle on their own, app by app, and the groups (several windows of one
-    /// app that the rules can't tell apart) they leave for Jev.
+    /// app that the rules can't tell apart) they leave for scoring and, last, for Jev.
     static func pairLocally(_ profile: Profile, _ live: [LiveWindow]) -> (pairs: [Pair], groups: [(lives: [Int], slots: [Int])]) {
         var pairs: [Pair] = []
         var groups: [(lives: [Int], slots: [Int])] = []
@@ -255,13 +289,17 @@ enum Arranger {
         let displayMap = Displays.pair(profile.displays, with: displays)
         let desktops = Spaces.userSpaces()
         return pairLocally(profile, live).pairs.filter { l, s in
-            let slot = profile.windows[s], window = live[l]
-            guard let display = displayMap[slot.display] else { return false }
-            if slot.isMinimized != window.minimized { return true }
-            // On a desktop that no longer exists (Arrange would add it), or on another desktop.
-            if slot.space > 0, let row = desktops[display.uuid], !row.isEmpty, slot.space > row.count || window.spaces != [row[slot.space - 1]] { return true }
-            return !window.minimized && !near(window.frame, slot.frame(on: display), Config.driftTolerance)
+            guard let display = displayMap[profile.windows[s].display] else { return false }
+            return !inPlace(profile.windows[s], live[l], on: display, desktops: desktops)
         }.count
+    }
+
+    /// Whether an open window already is where a slot has it: same state, desktop and frame.
+    static func inPlace(_ slot: SavedWindow, _ window: LiveWindow, on display: DisplayInfo, desktops: [String: [UInt64]]) -> Bool {
+        if slot.isMinimized != window.minimized { return false }
+        // On a desktop that no longer exists (Arrange would add it), or on another desktop.
+        if slot.space > 0, let row = desktops[display.uuid], !row.isEmpty, slot.space > row.count || window.spaces != [row[slot.space - 1]] { return false }
+        return window.minimized || near(window.frame, slot.frame(on: display), Config.driftTolerance)
     }
 
     /// What makes an open window the one a slot was saved from, surest first.

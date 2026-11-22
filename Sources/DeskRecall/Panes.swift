@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// First run: the three things to do, in order, and the settings as they stand. Nothing here
+/// First run: the two things to do, in order, and the settings as they stand. Nothing here
 /// blocks: every step can be skipped and found again in Settings.
 struct WelcomePane: View {
     @ObservedObject var app: AppDelegate
@@ -21,10 +21,6 @@ struct WelcomePane: View {
                 }
                 step(2, "Save your first layout", "Put your windows where you like them, on each display and desktop, then save. Do this once for every display setup you use.", done: !app.profiles.isEmpty) {
                     Button("Save Current Layout…") { app.saveNew() }.disabled(!app.trusted)
-                }
-                step(3, "Optional: add a TypeSafe Jev key", "Jev is a decision model that settles unclear cases, such as which of an app's five windows is which. With a key, details of your displays, the names of the apps and profiles involved, and the titles of the windows in question are sent to \(Config.jevEndpoint.host ?? "TypeSafe"). Without one nothing is sent and the app still works.", done: app.hasJevKey) {
-                    Button("Add Key…") { app.setJevKey() }
-                    Link("Get a key", destination: Config.jevSignup)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text("How it is set up").font(.headline)
@@ -87,7 +83,7 @@ struct AboutPane: View {
                 Button("Copy Diagnostics") { app.copyDiagnostics() }
             }
             .padding(.top, 6)
-            Text("Diagnostics list versions, displays and settings, with no window titles or names. Report a Bug passes them to GitHub when it opens the issue page; nothing else leaves your Mac.")
+            Text("Diagnostics list versions, displays and settings, with no window titles or names. Report a Bug passes them to GitHub when it opens the issue page; Copy Diagnostics sends nothing.")
                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 420)
         }
         .padding(30)

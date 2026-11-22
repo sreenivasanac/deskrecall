@@ -50,27 +50,28 @@ Apps that aren't open are skipped. Nothing is launched and nothing is closed.
 | Windows on desktops you aren't looking at | no | no | yes |
 | Minimized state | no | no | yes, both ways |
 | See a saved layout as a picture | no | no | yes |
-| Matching windows whose titles changed | manual "linking" / patterns | title regex, z-order | a decision model (Jev) |
+| Matching windows whose titles changed | manual "linking" / patterns | title regex, z-order | shared title words and position, on your Mac; a decision model (Jev) if you want one |
 | Snapping, halves/thirds, shortcuts | no | yes | no (use Rectangle for that) |
 
 Moom, BetterTouchTool, Raycast and Magnet are window managers first: very good at placing the
 window in front of you with a shortcut or a drag, which DeskRecall does not do at all. Three of them
-can also save a layout. This is how far that goes, according to each maker's own documentation:
+can also save a layout, and BetterTouchTool has come furthest. This is how far each goes, according to each maker's own documentation:
 
 | | Moom 4 | BetterTouchTool | Raycast | Magnet | DeskRecall |
 | --- | --- | --- | --- | --- | --- |
-| Saves a whole layout | yes | yes, as an action you set up | yes, on the paid plan; up to eight windows per display | no, snapping only | yes, every open window |
+| Saves a whole layout | yes | yes, with a layout editor | yes, on the paid plan; up to eight windows per display | no, snapping only | yes, every open window |
 | Applies it when displays change | yes | with a display trigger you build yourself | no, you run the layout | no | yes, or with one click |
-| Windows on other desktops (Spaces) | no: one layout per desktop, for the desktop you are looking at | no: the current desktop only | no: a command moves the focused window one desktop over | no | yes: every window goes back to its own desktop, without switching to it, and missing desktops are added |
-| Minimized windows | left out of a layout | no | no (a layout can minimize what it doesn't place) | no | minimized again, or brought back out, as saved |
-| Telling one app's windows apart | by app, then its own matching | not documented | by app | n/a | the same window, file, title or browser profile; Jev for what is left |
+| Windows on other desktops (Spaces) | no: one layout per desktop, for the desktop you are looking at | partly: since late 2026 a layout can include all desktops, by visiting each in turn and placing the windows found there; a window that ended up on another desktop is not brought back | no: a command moves the focused window one desktop over | no | yes: every window goes back to its own desktop, without switching to it, and missing desktops are added |
+| Minimized windows | left out of a layout | yes, in recent versions | no (a layout can minimize what it doesn't place) | no | minimized again, or brought back out, as saved |
+| Telling one app's windows apart | by app, then its own matching | its own matching | by app | n/a | the same window, file, title or browser profile, then shared title words and position |
 | Two monitors of one model | by arrangement only | by name or position | not documented | n/a | by macOS's identifier and manufacture date, then position |
 | Tells you the layout has drifted | no | no | no | no | yes: how many windows moved, with put back or keep |
 | Snapping, grids, shortcuts, gestures | yes | yes, and much more | yes | yes | no (keep yours; DeskRecall works beside it) |
 
 Checked in November 2026 against the [Moom help](https://manytricks.com/moom/help/customactions.html),
-the [BetterTouchTool forum](https://community.folivora.ai/t/absolute-monitor-targeting-multi-monitor-workflow-reliability/45946)
-(answers from its developer), the [Raycast manual](https://manual.raycast.com/window-management) and
+BetterTouchTool's release notes and its developer's forum answers
+([moving between desktops](https://community.folivora.ai/t/absolute-monitor-targeting-multi-monitor-workflow-reliability/45946),
+[layouts across desktops](https://community.folivora.ai/t/save-and-restore-window-layouts-across-multiple-spaces/48005)), the [Raycast manual](https://manual.raycast.com/window-management) and
 the [Magnet site](https://magnet.crowdcafe.com/). These apps change; open an issue if a cell is out of date.
 
 DeskRecall is not a window snapper. It does one thing: put a whole working layout back.
@@ -79,7 +80,7 @@ DeskRecall is not a window snapper. It does one thing: put a whole working layou
 
 Open it from the menu (**Profiles…** or **Settings…**) or by opening the app again. The sidebar
 lists your profiles, with Settings and About under them. On first launch a short Welcome guide
-walks through the permission, the first profile and the optional Jev key.
+walks through the permission and the first profile.
 
 **A profile** is shown as a picture: how the displays were arranged, each desktop
 drawn to scale with its windows, and the minimized ones listed underneath. It is view only on
@@ -87,7 +88,7 @@ purpose. To change a layout, arrange the real windows and press **Update with Cu
 The profile you are on is marked *Current*, with the number of windows that have moved.
 
 **Settings** holds the switches: arrange automatically when displays change, what to do with a
-window the app is unsure about, launch at login, the Accessibility permission, the Jev key and
+window the app is unsure about, launch at login, the Accessibility permission, the optional Jev key and
 update checks.
 
 **About** has the version, links, and Report a Bug, Send Feedback and Copy Diagnostics.
@@ -126,7 +127,7 @@ the surest evidence is used first:
 2. The same file.
 3. The same title.
 4. One open window and one saved window left for an app: they belong together.
-5. Anything still open goes to Jev (below).
+5. Anything still open is scored by title and position (below).
 
 Windows of a Chromium browser are matched only within their own browser profile, which Chrome and
 Comet put at the end of the window title. A Work window never takes a
@@ -134,26 +135,35 @@ Personal window's place.
 
 ## How it decides the unclear cases
 
-Every judgement call goes to [TypeSafe Jev](https://typesafe.ai), a decision model that returns a
-typed answer with a calibrated confidence:
+Everything is decided on your Mac, by rules you can read in `Arranger.swift`:
 
-- **Which profile?** When no profile was saved on this set of monitors.
-- **Which display stands in for which?** When a profile is replayed on different monitors.
-- **Which window is which?** When an app has several windows and nothing above settles it.
+- **Which profile?** When no profile was saved on this set of monitors, the one whose displays are
+  most like these: the same units, then the same models, then the same kind (built-in or external)
+  and resolution. It is used without asking only when it stands alone and the setup has the same
+  shape, the same number of built-in and external displays.
+- **Which display stands in for which?** The same scoring, display by display. With fewer displays
+  than the profile had, the ones that are gone share the most alike of those left.
+- **Which window is which?** When an app was quit and reopened, has several windows, and their
+  titles have changed, nothing identifies them for certain. Two signs are then weighed: the words
+  the old and new titles share (leaving out the ones every window of the app has, such as the app's
+  name), and whether a window already sits where a saved one was, as it does when macOS reopens an
+  app's windows. A pairing counts as sure only when it stands clear of every other.
 
-For those questions details of your displays, the names of the apps and profiles involved, and the
-titles of the windows in question are sent to `api.typesafe.ai`. None of it is sent without a key.
-The [privacy page](https://deskrecall.pragnyalabs.com/privacy.html) lists everything the app stores
-and sends.
-
-A low-confidence answer about a window is a conflict, and **Settings → When unsure which window is
+A pairing that is not sure is a conflict, and **Settings → When unsure which window is
 which** says what happens: *Ask me* (one dialog with the best guess preselected), *Use the best
 guess*, or *Leave the window where it is*. When DeskRecall arranges on its own after a display
 change there is nobody to ask, so *Ask me* leaves those windows alone. Auto-arrange never picks a
 profile by guesswork either: with no clear match it does nothing.
 
-Without a Jev key the app still works for exact setups; same-app windows that the rules above
-can't settle are paired in window order, and you pick the profile yourself when it is ambiguous.
+### Optional: a decision model for the last case
+
+Shared words are not meaning: a window now titled "Pull request #42" and one saved as "GitHub" have
+nothing in common for the rules. If you add a [TypeSafe Jev](https://typesafe.ai) key under
+Settings, the windows the rules are unsure about, and only those, are put to Jev, a decision model
+that returns a typed answer with a calibrated confidence. For that the window titles and the names
+of their app, the profile and its displays are sent to `api.typesafe.ai`. Without a key nothing
+about your windows leaves your Mac. The [privacy page](https://deskrecall.pragnyalabs.com/privacy.html)
+lists everything the app stores and sends.
 
 ## Install
 
@@ -167,7 +177,7 @@ can't settle are paired in window order, and you pick the profile yourself when 
    the only permission the app uses; it is what lets it read window titles and move windows.
 4. Lay out your windows, then choose **Save Layout as New Profile…** from the menu bar icon.
    Repeat once per display setup.
-5. Optional: add a TypeSafe Jev key under **Settings** for the unclear cases.
+5. Optional: add a TypeSafe Jev key under **Settings** for a second opinion on reopened windows.
 
 ### Requirements and compatibility
 
@@ -211,7 +221,7 @@ each rebuild. `RELEASE=1` also notarizes and staples when a Developer ID certifi
 - **Help ▸** — the Welcome guide, the website, **Report a Bug…** (a GitHub issue, filled in),
   **Send Feedback…** (an email) and **Copy Diagnostics**. Diagnostics hold versions, displays,
   counts and settings, never window titles or names. Report a Bug passes them to GitHub when it
-  opens the issue page; nothing else leaves your Mac.
+  opens the issue page; Copy Diagnostics sends nothing.
 - **Check for Updates…** — the app also checks about once a day and offers to install a new version.
 
 ## Command line
@@ -270,7 +280,7 @@ closed before you start.
   identifier and the same arrangement cannot be told apart. The profile last used wins; switch with
   **Switch to Profile ▸**.
 - The browser-profile rule covers Chromium browsers. Safari, Firefox and Edge name profiles
-  differently or not at all; their windows fall through to title matching and Jev.
+  differently or not at all; their windows fall through to title matching.
 - The Jev key lives in your login keychain. If you used a version before 0.4, macOS asks for your
   keychain password once, the first time the key is needed, because the app's signature changed;
   it also asks you to grant Accessibility again.

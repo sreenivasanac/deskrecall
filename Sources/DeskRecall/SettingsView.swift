@@ -18,7 +18,7 @@ struct SettingsPane: View {
             } header: {
                 Text("Arranging")
             } footer: {
-                note("An app with several windows whose titles have changed can leave \(Config.appName) unsure which is which. Windows it is sure about are always placed. When it arranges on its own after a display change there is nobody to ask, so “Ask me” leaves those windows where they are.")
+                note("An app that was quit and reopened, with several windows whose titles have since changed, can leave \(Config.appName) unsure which is which. It goes by the words the titles share and by where the windows sit. Windows it is sure about are always placed. When it arranges on its own after a display change there is nobody to ask, so “Ask me” leaves those windows where they are.")
             }
 
             Section("Startup") {
@@ -48,9 +48,9 @@ struct SettingsPane: View {
                     }
                 }
             } header: {
-                Text("TypeSafe Jev")
+                Text("TypeSafe Jev (optional)")
             } footer: {
-                note("Jev is the decision model that settles the unclear cases: which profile suits a new display setup, which display stands in for a missing one, which window is which. For those questions details of your displays, the names of the apps and profiles involved, and the titles of the windows in question are sent to \(Config.jevEndpoint.host ?? "TypeSafe"). Without a key nothing is sent, and same-app windows are paired in order.")
+                note("\(Config.appName) works without this, and nothing about your windows leaves your Mac. Jev is a decision model that gives a second opinion on the one case above: reopened windows that titles and positions cannot tell apart. With a key, for those windows only, the window titles and the names of their app, the profile and its displays are sent to \(Config.jevEndpoint.host ?? "TypeSafe").")
             }
 
             if Updates.available {

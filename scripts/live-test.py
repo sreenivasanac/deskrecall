@@ -112,7 +112,7 @@ def check(baseline_plan, mess):
     time.sleep(1.5)
     problems = differences(want, Desk().windows)
     # What the menu says about the layout: changed after the mess, in place again after Arrange.
-    if noticed in ("", "moved 0"):
+    if not re.fullmatch(r"moved [1-9]\d*", noticed):
         problems.append(f"the app did not notice the changed layout ({noticed or 'no answer'})")
     after = cli("--moved", PROFILE).strip()
     if after != "moved 0":

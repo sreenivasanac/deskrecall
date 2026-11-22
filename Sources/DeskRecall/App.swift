@@ -72,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         change(&all)
         let saved = Store.save(all)
         refresh()
+        refreshMoved()      // deleting or replacing a profile can change which layout is current
         if !saved { finish("Couldn't write \(Config.profilesURL.lastPathComponent); nothing was changed", ok: false) }
         return saved
     }
@@ -246,7 +247,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     func setJevKey() {
-        guard let key = UI.prompt("TypeSafe Jev API key", "With a key, details of your displays, the names of the apps and profiles involved, and the titles of windows \(Config.appName) can't match on its own are sent to \(Config.jevEndpoint.host ?? "TypeSafe") when you arrange. Saving a key is your agreement to that. The key itself stays in your login keychain.", secure: true) else { return }
+        guard let key = UI.prompt("TypeSafe Jev API key", "With a key, the titles of reopened windows \(Config.appName) can't tell apart on its own, with the names of their app, the profile and its displays, are sent to \(Config.jevEndpoint.host ?? "TypeSafe") when you arrange. Saving a key is your agreement to that. The key itself stays in your login keychain.", secure: true) else { return }
         guard Jev.store(key) else {
             _ = UI.confirm("Couldn't save the Jev key", "The login keychain refused it. Unlock the keychain and try again.", cancel: nil)
             return

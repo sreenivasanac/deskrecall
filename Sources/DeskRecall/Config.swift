@@ -8,7 +8,7 @@ enum Keys {
     static let onboarded = "onboarded"              // the Welcome pane has been finished
 }
 
-/// What to do with a window when Jev's match is below `Config.jevMinConfidence`.
+/// What to do with a window whose match is only a best guess (below `Config.matchFloor`/`matchMargin`, or Jev's `jevMinConfidence`).
 enum Unsure: String, CaseIterable, Identifiable {
     case ask, guess, leave
     var id: String { rawValue }
@@ -50,6 +50,10 @@ enum Config {
     static let jevTimeout: TimeInterval = 8
     /// Below this confidence a Jev decision is treated as a conflict and the user is asked.
     static let jevMinConfidence = 0.5
+    // Telling an app's reopened windows apart on the Mac: shared title words and "already in its
+    // saved place" add up to at most 1. A pair is sure from `matchFloor` up, if it beats every rival by `matchMargin`.
+    static let titleWeight = 0.6, placeWeight = 0.4
+    static let matchFloor = 0.25, matchMargin = 0.15
     static let keychainService = bundleID
     static let keychainAccount = "typesafe-api-key"
 
