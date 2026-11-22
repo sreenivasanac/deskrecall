@@ -67,6 +67,10 @@ if args.contains("--selfcheck") {
     precondition(Matching.standIns(for: [display, laptop], among: [display, other]).score > swapped.score
                  && swapped.score > Matching.standIns(for: [display, laptop], among: [other]).score, "the same monitors fit best, the same shape next")
 
+    var twinA = display, twinB = display
+    twinA.uuid = "A"; twinB.uuid = "B"; twinB.x = 2000
+    precondition(Matching.standIns(for: [twinB, twinA, laptop], among: [twinA, twinB]).map[0] == 1, "twins follow their id on another setup too")
+
     // Reopened windows: shared title words decide, and only when one pairing stands clear.
     func title(_ a: String, _ b: String) -> Double { Matching.overlap(Matching.words(a), Matching.words(b)) }
     let reopened = [(live: 1, slot: 10, p: title("App.swift — deskrecall", "main.swift — deskrecall")), (live: 1, slot: 11, p: title("App.swift — deskrecall", "index.ts — website")),

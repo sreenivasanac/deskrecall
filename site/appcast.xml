@@ -4,7 +4,7 @@
     <title>DeskRecall</title>
     <item>
       <title>Version 0.5.0</title>
-      <pubDate>Sun, 22 Nov 2026 19:49:41 +0000</pubDate>
+      <pubDate>Sun, 22 Nov 2026 20:08:07 +0000</pubDate>
       <sparkle:version>0.5.0</sparkle:version>
       <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
@@ -15,7 +15,7 @@
   <li>Updates from inside the app, plus Report a Bug, Send Feedback and Copy Diagnostics under Help.</li>
   <li>Reopened windows whose titles have changed are now told apart on your Mac, by the words their titles share and where they sit. A Jev key is optional.</li>
 </ul>]]></description>
-      <enclosure url="https://github.com/sreenivasanac/deskrecall/releases/download/v0.5.0/DeskRecall.zip" type="application/octet-stream" sparkle:edSignature="f4fX19Prmamb7g6eKIVijUS2gaedLMdJO00bytewookrUOkvcz1kBNsuUn0dxBjF3YvQhwhsoP5Wb/N2cs9+BA==" length="2042667" />
+      <enclosure url="https://github.com/sreenivasanac/deskrecall/releases/download/v0.5.0/DeskRecall.zip" type="application/octet-stream" sparkle:edSignature="33W/gFsGEFDCNH8kxEJfMORSfVwWscaLQpC9jz0r9SWOYcBT2f7eKV3XrixbjudZmTHoOopMeDsQshqq+YPXAw==" length="2042974" />
     </item>
   </channel>
 </rss>

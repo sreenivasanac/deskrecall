@@ -16,9 +16,13 @@ enum Matching {
 
     /// How alike two monitors are, for reusing a layout on a setup it was not saved on: the same
     /// unit, then another unit of the model, then the same kind (built-in or external) and resolution.
+    /// Twins with a placeholder serial are told apart as in `Profile.closeness`: by manufacture
+    /// date and by the identifier macOS gives each.
     static func alike(_ a: DisplayInfo, _ b: DisplayInfo) -> Double {
         var score = 0.0
-        if a.hardwareKey == b.hardwareKey { score += 8 } else if a.vendor == b.vendor && a.model == b.model && a.builtin == b.builtin { score += 4 }
+        let otherUnit = a.made != nil && b.made != nil && a.made != b.made
+        if a.hardwareKey == b.hardwareKey && !otherUnit { score += 8 } else if a.vendor == b.vendor && a.model == b.model && a.builtin == b.builtin { score += 4 }
+        if a.uuid == b.uuid { score += 2 }
         if a.builtin == b.builtin { score += 2 }
         if a.width == b.width && a.height == b.height { score += 1 }
         return score
@@ -158,10 +162,15 @@ enum Arranger {
         let local = pairLocally(profile, live)
         var pairs = local.pairs
         let desktops = Spaces.userSpaces()
-        let scoredGroups = local.groups.map { group in
-            (group: group, local: Matching.settle(score(group, profile, live, displayMap, desktops), floor: Config.matchFloor, margin: Config.matchMargin))
+        // What stays open in each group once its sure pairs are taken out, with the best guess for it.
+        var undecided: [(lives: [Int], slots: [Int], guess: [Int: Int])] = []
+        for group in local.groups {
+            let settled = Matching.settle(score(group, profile, live, displayMap, desktops), floor: Config.matchFloor, margin: Config.matchMargin)
+            pairs.append(contentsOf: settled.sure.map { ($0.key, $0.value) })
+            if settled.unsure.isEmpty { continue }
+            undecided.append((group.lives.filter { settled.sure[$0] == nil }, group.slots.filter { !settled.sure.values.contains($0) }, settled.unsure))
         }
-        let groups = scoredGroups.filter { !$0.local.unsure.isEmpty }.map(\.group)    // the ones worth a question
+        let groups = undecided.map { (lives: $0.lives, slots: $0.slots) }    // only these are worth a question, and only these are sent
         func open(_ l: Int) -> String { "\"\(live[l].title)\"" + (live[l].minimized ? " (minimized)" : "") }
         for (lives, slots) in groups {
             if slots.count == 1 {   // several windows compete for one slot
@@ -189,7 +198,7 @@ enum Arranger {
         }
 
         var unsure: [(live: Int, slot: Int, slots: [Int])] = []
-        for (group, local) in scoredGroups {
+        for group in undecided {
             var scored: [(live: Int, slot: Int, p: Double)] = []
             var confidence: [Int: Double] = [:]
             if group.slots.count == 1, let a = answers["s\(group.slots[0])"] {
@@ -201,9 +210,8 @@ enum Arranger {
                     for s in group.slots { scored.append((l, s, a.probabilities["s\(s)"] ?? 0)) }
                 }
             }
-            if scored.isEmpty {     // the rules were sure, or there is no answer from Jev: what the Mac worked out itself
-                pairs.append(contentsOf: local.sure.map { ($0.key, $0.value) })
-                unsure.append(contentsOf: local.unsure.sorted { $0.key < $1.key }.map { ($0.key, $0.value, group.slots) })
+            if scored.isEmpty {     // no answer from Jev: the Mac's own best guess
+                unsure.append(contentsOf: group.guess.sorted { $0.key < $1.key }.map { ($0.key, $0.value, group.slots) })
                 continue
             }
             for (l, s) in Matching.assign(scored) {
