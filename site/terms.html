@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms · DeskRecall</title>
+<meta name="description" content="Licence, warranty and compatibility for DeskRecall.">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Same colours and type as index.html. */
+  :root { --ink: #171a45; --ink-soft: #2b2f6b; --paper: #f5f6fb; --line: #d9dcec; --text: #2a2d47; --muted: #5d6180; --amber: #ffb84d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--text); font: 400 1.0625rem/1.65 "IBM Plex Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+  h1, h2 { font-family: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif; color: var(--ink); line-height: 1.15; }
+  h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 40px 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.45rem; margin: 44px 0 10px; }
+  a { color: var(--ink-soft); text-underline-offset: 3px; }
+  a:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; border-radius: 6px; }
+  code { font: 0.92em ui-monospace, "SF Mono", Menlo, monospace; background: #e9ebf6; padding: 0.1em 0.35em; border-radius: 4px; }
+  .top { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 700 1.2rem "Bricolage Grotesque", sans-serif; color: var(--ink); text-decoration: none; }
+  .brand img { width: 36px; height: 36px; }
+  .dated { color: var(--muted); margin: 0; }
+  .summary { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; margin: 24px 0 0; }
+  li { margin-bottom: 0.45rem; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--ink); }
+  footer { margin-top: 56px; padding: 28px 0 56px; border-top: 1px solid var(--line); font-size: 0.95rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
+</style>
+<!-- Anonymous visit counts (self-hosted Umami, no cookies), served first-party at /u/ by nginx. Only reports from the live site. -->
+<script defer src="/u/p.js" data-website-id="f2ec77ff-fae8-4cc4-9c57-7802dd919683" data-domains="deskrecall.pragnyalabs.com"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./"><img src="icon.png" alt="">DeskRecall</a>
+    <a href="./">Back to the home page</a>
+  </header>
+  <main>
+    <h1>Terms</h1>
+    <p class="dated">Last updated 21 November 2026.</p>
+    <div class="summary">
+      <strong>In short.</strong> DeskRecall is free, its source is public under the MIT licence, and it comes with no warranty. Use it at your own risk.
+    </div>
+
+    <h2>Licence</h2>
+    <p>DeskRecall is © 2026 Sreenivasan AC and released under the <a href="https://github.com/sreenivasanac/deskrecall/blob/main/LICENSE">MIT licence</a>. You may use, copy, change and share it on the conditions set out there.</p>
+
+    <h2>No warranty, no liability</h2>
+    <p>The software is provided "as is", without warranty of any kind, express or implied, including the warranties of merchantability, fitness for a particular purpose and non-infringement. To the fullest extent the law allows, the author is not liable for any claim, damages or other loss arising from the software or from its use, including lost work, lost data or an interrupted workflow.</p>
+
+    <h2>What the app does to your Mac</h2>
+    <ul>
+      <li>With the Accessibility permission you grant, it reads the titles and positions of your windows and moves, resizes, minimizes and restores them. It closes nothing and launches nothing.</li>
+      <li>When a saved layout needs more Mission Control desktops than exist, it adds them by opening Mission Control and pressing its "+" button.</li>
+      <li>Moving windows between desktops uses macOS interfaces that Apple does not document. A macOS update can stop that part working; the app then still restores displays, positions and sizes.</li>
+      <li>Updating a profile replaces its saved layout. There is no undo.</li>
+    </ul>
+
+    <h2>Compatibility</h2>
+    <table>
+      <tr><th>macOS</th><th>What works</th></tr>
+      <tr><td>26.4 and later</td><td>Everything, including moving windows between desktops. Tested on macOS 26.7.</td></tr>
+      <tr><td>14 (Sonoma) to 26.3</td><td>Displays, positions, sizes and minimized state. Windows are not moved between desktops.</td></tr>
+      <tr><td>13 and earlier</td><td>Not supported; the app does not open.</td></tr>
+    </table>
+    <p>The app runs on Apple Silicon and Intel Macs. It has been tested on Apple Silicon only. It is distributed outside the Mac App Store, signed with a Developer ID and notarized by Apple.</p>
+
+    <h2>Other services</h2>
+    <p>TypeSafe Jev is an optional third-party service that you use with your own key and under TypeSafe's terms. Updates are delivered with the open-source <a href="https://sparkle-project.org">Sparkle</a> framework, and downloads are hosted by GitHub. DeskRecall is not affiliated with or endorsed by Apple, TypeSafe, or the makers of Stay or Rectangle. macOS and Mission Control are trademarks of Apple Inc.</p>
+
+    <h2>Privacy and contact</h2>
+    <p>What the app stores and sends is described on the <a href="privacy.html">privacy page</a>. Questions go to <a href="mailto:sreenivasan.nitt@gmail.com">sreenivasan.nitt@gmail.com</a>.</p>
+  </main>
+  <footer>
+    <span>DeskRecall, a Pragnya Labs project by Sreenivasan AC.</span>
+    <span><a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a> &nbsp; <a href="https://github.com/sreenivasanac/deskrecall">Source</a></span>
+  </footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · DeskRecall</title>
+<meta name="description" content="What DeskRecall stores on your Mac, what it sends, and what this website records.">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Same colours and type as index.html. */
+  :root { --ink: #171a45; --ink-soft: #2b2f6b; --paper: #f5f6fb; --line: #d9dcec; --text: #2a2d47; --muted: #5d6180; --amber: #ffb84d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--text); font: 400 1.0625rem/1.65 "IBM Plex Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+  h1, h2 { font-family: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif; color: var(--ink); line-height: 1.15; }
+  h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 40px 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.45rem; margin: 44px 0 10px; }
+  a { color: var(--ink-soft); text-underline-offset: 3px; }
+  a:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; border-radius: 6px; }
+  code { font: 0.92em ui-monospace, "SF Mono", Menlo, monospace; background: #e9ebf6; padding: 0.1em 0.35em; border-radius: 4px; }
+  .top { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 700 1.2rem "Bricolage Grotesque", sans-serif; color: var(--ink); text-decoration: none; }
+  .brand img { width: 36px; height: 36px; }
+  .dated { color: var(--muted); margin: 0; }
+  .summary { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; margin: 24px 0 0; }
+  li { margin-bottom: 0.45rem; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--ink); }
+  footer { margin-top: 56px; padding: 28px 0 56px; border-top: 1px solid var(--line); font-size: 0.95rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
+</style>
+<!-- Anonymous visit counts (self-hosted Umami, no cookies), served first-party at /u/ by nginx. Only reports from the live site. -->
+<script defer src="/u/p.js" data-website-id="f2ec77ff-fae8-4cc4-9c57-7802dd919683" data-domains="deskrecall.pragnyalabs.com"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./"><img src="icon.png" alt="">DeskRecall</a>
+    <a href="./">Back to the home page</a>
+  </header>
+  <main>
+    <h1>Privacy</h1>
+    <p class="dated">Last updated 21 November 2026. Applies to DeskRecall 0.5 and later, and to this website.</p>
+    <div class="summary">
+      <strong>In short.</strong> DeskRecall has no account, no analytics and no crash reporting. Your layouts stay on your Mac.
+      I, the developer, receive nothing about you or your windows unless you choose to send me a bug report or an email.
+    </div>
+
+    <h2>What the app keeps on your Mac</h2>
+    <ul>
+      <li><strong>Your profiles</strong>, in <code>~/Library/Application Support/DeskRecall/profiles.json</code>. For each saved window: the app, the window title, the file it shows (when the app reports one), and where it sits. For each display: its name, model, serial number, manufacture date and macOS's identifier for it.</li>
+      <li><strong>Your settings</strong>, in macOS's ordinary preferences for the app.</li>
+      <li><strong>Your TypeSafe Jev key</strong>, if you add one, in your login keychain.</li>
+    </ul>
+    <p>None of this is sent to me or to anyone else, except as described under Jev below. To remove it all:</p>
+    <ul>
+      <li>delete the app and the folder <code>~/Library/Application Support/DeskRecall</code>;</li>
+      <li>delete the settings with <code>defaults delete com.sreenivasanac.deskrecall</code> in Terminal;</li>
+      <li>if you added a Jev key, delete the item named <code>com.sreenivasanac.deskrecall</code> in Keychain Access. Nothing else in your keychain belongs to the app.</li>
+    </ul>
+
+    <h2>When the app uses the network</h2>
+    <table>
+      <tr><th>What</th><th>When</th><th>What is sent</th></tr>
+      <tr>
+        <td>Update check</td>
+        <td>About once a day, and when you choose Check for Updates. Switch it off under Settings → Updates.</td>
+        <td>A request for a small file on <code>deskrecall.pragnyalabs.com</code>. Like any web request it carries your IP address, the app's version and your macOS version. A new version is downloaded from GitHub.</td>
+      </tr>
+      <tr>
+        <td>TypeSafe Jev</td>
+        <td>Only if you add a Jev key, and only when arranging meets a case the app can't settle on its own.</td>
+        <td>To <code>api.typesafe.ai</code>: details of your displays (name, model, serial number, resolution, position), the names of your profiles and of the apps involved, and the titles of the windows in question. TypeSafe handles that under <a href="https://typesafe.ai">its own terms</a>. Without a key, nothing is sent.</td>
+      </tr>
+    </table>
+    <p>The app makes no other network requests.</p>
+
+    <h2>Bug reports, feedback and diagnostics</h2>
+    <p><strong>Report a Bug</strong> opens a new GitHub issue in your browser with the diagnostics already filled in. Opening that page sends the diagnostics to GitHub; the issue becomes public only if you submit it. <strong>Send Feedback</strong> opens an email in your mail app that contains only the app version and your macOS version, and it is not sent until you press send. <strong>Copy Diagnostics</strong> puts the same diagnostics on your clipboard and sends nothing.</p>
+    <p>The diagnostics list the app and macOS versions, your displays' names and resolutions, counts of desktops, windows and profiles, and your settings. They contain no window titles, app names, profile names or serial numbers.</p>
+
+    <h2>This website</h2>
+    <ul>
+      <li>Visits are counted with a self-hosted copy of Umami. It sets no cookies and builds no profile of you; it records the page, the referring site, and the browser, system and country, and it counts clicks on the download and GitHub links.</li>
+      <li>The web server keeps ordinary access logs, which include IP addresses, for 14 days to keep the site running.</li>
+      <li>The download is served by GitHub, and fonts by Google Fonts; each sees your request under its own privacy policy.</li>
+    </ul>
+
+    <h2>Questions</h2>
+    <p>Write to <a href="mailto:sreenivasan.nitt@gmail.com">sreenivasan.nitt@gmail.com</a>. The app's source code is <a href="https://github.com/sreenivasanac/deskrecall">public</a>, so everything on this page can be checked against it. If the app changes in a way that affects this page, the page and its date change with it.</p>
+  </main>
+  <footer>
+    <span>DeskRecall, a Pragnya Labs project by Sreenivasan AC.</span>
+    <span><a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a> &nbsp; <a href="https://github.com/sreenivasanac/deskrecall">Source</a></span>
+  </footer>
+</div>
+</body>
+</html>

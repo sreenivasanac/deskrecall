@@ -14,8 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @Published private(set) var hasJevKey = false
     @Published private(set) var launchAtLogin = false
     @Published var pane = Pane.profiles
+    /// The layout this display setup is on, and how many of its windows have been moved since.
+    @Published private(set) var current: Profile?
+    @Published private(set) var moved = 0
 
-    enum Pane: String, CaseIterable { case profiles = "Profiles", settings = "Settings" }
+    enum Pane: String, CaseIterable { case welcome = "Welcome", profiles = "Profiles", settings = "Settings", about = "About" }
 
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private var window: NSWindow?
@@ -35,7 +38,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         lastKey = setKey
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        if profiles.isEmpty || !trusted { show(.profiles) }    // first run: the window says what to do next
+        Updates.start()
+        // First run: the Welcome pane says what to do next. Someone already set up before it existed skips it.
+        let defaults = UserDefaults.standard
+        if !defaults.bool(forKey: Keys.onboarded) {
+            if profiles.isEmpty || !trusted { show(.welcome) } else { defaults.set(true, forKey: Keys.onboarded) }
+        } else if profiles.isEmpty || !trusted {
+            show(.profiles)
+        }
     }
 
     func refresh() {
@@ -44,7 +54,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         trusted = Windows.trusted
         hasJevKey = Jev.hasKey
         launchAtLogin = SMAppService.mainApp.status == .enabled
+        current = Store.current(profiles, for: displays)
     }
+
+    /// Compares the open windows with the current layout. Reads every window, so it runs only
+    /// when the menu or the window is about to show the answer, not on every refresh.
+    private func refreshMoved() {
+        moved = trusted ? current.map { Arranger.moved(from: $0, displays: displays, live: Windows.capture()) } ?? 0 : 0
+    }
+    private var movedText: String { "\(moved) window\(moved == 1 ? " has" : "s have") moved" }
 
     /// Every change to the saved profiles goes through here: read from disk, change, write, republish.
     /// False, with the reason as the status, when the file could not be written.
@@ -69,32 +87,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         refresh()
+        refreshMoved()
         menu.removeAllItems()
-        let same = matching
         func info(_ text: String) { menu.addItem(NSMenuItem(title: text, action: nil, keyEquivalent: "")) }
 
         info("Displays: " + displays.map { "\($0.name) \($0.width)×\($0.height)" }.joined(separator: " + "))
-        info("Profile: " + (!same.isEmpty ? same.map(\.name).joined(separator: ", ")
-                            : profiles.isEmpty ? "none saved yet" : "none for this setup, the closest is adapted"))
+        if let current {
+            info("Layout: “\(current.name)” · " + (moved == 0 ? "no window has moved" : "\(movedText) since"))
+        } else {
+            info("Layout: " + (profiles.isEmpty ? "no profile saved yet" : "no profile for these displays yet"))
+        }
         info(status)
         menu.addItem(.separator())
         if !trusted {
             menu.addItem(ActionItem("Grant Accessibility Permission…") { Windows.requestTrust() })
             menu.addItem(.separator())
         }
-        menu.addItem(ActionItem("Arrange") { [weak self] in self?.arrange(interactive: true) })
-        if !profiles.isEmpty {
-            let apply = NSMenuItem(title: "Apply Profile", action: nil, keyEquivalent: "")
+        // The two ways out of a changed layout sit next to each other: go back to it, or keep the change.
+        if let current {
+            menu.addItem(ActionItem(moved == 0 ? "Restore “\(current.name)”" : "Put Windows Back (Restore “\(current.name)”)") { [weak self] in self?.arrange(interactive: true) })
+            menu.addItem(ActionItem(moved == 0 ? "Update “\(current.name)” with Current Layout…" : "Keep This Layout (Update “\(current.name)”)…") { [weak self] in self?.update(current) })
+        } else {
+            menu.addItem(ActionItem(profiles.isEmpty ? "Arrange" : "Arrange from the Closest Profile") { [weak self] in self?.arrange(interactive: true) })
+        }
+        menu.addItem(ActionItem("Save Layout as New Profile…") { [weak self] in self?.saveNew() })
+        if profiles.count > (current == nil ? 0 : 1) {
+            let apply = NSMenuItem(title: "Switch to Profile", action: nil, keyEquivalent: "")
             apply.submenu = NSMenu()
             for p in profiles {
-                apply.submenu?.addItem(ActionItem(p.name, checked: same.contains { $0.id == p.id }) { [weak self] in self?.arrange(interactive: true, forced: p) })
+                // A tick for the layout in force, a dash once windows have moved away from it.
+                let state: NSControl.StateValue = p.id != current?.id ? .off : moved == 0 ? .on : .mixed
+                apply.submenu?.addItem(ActionItem(p.name, state: state) { [weak self] in self?.arrange(interactive: true, forced: p) })
             }
             menu.addItem(apply)
-        }
-        menu.addItem(.separator())
-        menu.addItem(ActionItem("Save Layout as New Profile…") { [weak self] in self?.saveNew() })
-        if same.count == 1 {
-            menu.addItem(ActionItem("Update “\(same[0].name)” with Current Layout…") { [weak self] in self?.update(same[0]) })
         }
         menu.addItem(.separator())
         menu.addItem(ActionItem("Profiles…") { [weak self] in self?.show(.profiles) })
@@ -105,7 +130,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             defaults.set(!defaults.bool(forKey: Keys.autoArrange), forKey: Keys.autoArrange)
         })
         menu.addItem(.separator())
+        let help = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")
+        help.submenu = NSMenu()
+        help.submenu?.addItem(ActionItem("Welcome Guide") { [weak self] in self?.show(.welcome) })
+        help.submenu?.addItem(ActionItem("Website and Documentation") { NSWorkspace.shared.open(Config.website) })
+        help.submenu?.addItem(.separator())
+        help.submenu?.addItem(ActionItem("Report a Bug…") { Diagnostics.reportBug() })
+        help.submenu?.addItem(ActionItem("Send Feedback…") { Diagnostics.sendFeedback() })
+        help.submenu?.addItem(ActionItem("Copy Diagnostics") { [weak self] in self?.copyDiagnostics() })
+        menu.addItem(help)
+        if Updates.available { menu.addItem(ActionItem("Check for Updates…") { Updates.check() }) }
+        menu.addItem(ActionItem("About \(Config.appName)") { [weak self] in self?.show(.about) })
         menu.addItem(ActionItem("Quit \(Config.appName)") { NSApp.terminate(nil) })
+    }
+
+    func copyDiagnostics() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(Diagnostics.report(), forType: .string)
+        finish("Diagnostics copied to the clipboard", ok: true)
     }
 
     // MARK: Window (profiles and settings share it)
@@ -113,6 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     func show(_ pane: Pane) {
         self.pane = pane
         refresh()
+        refreshMoved()
         if window == nil {
             let w = NSWindow(contentViewController: NSHostingController(rootView: ProfilesView(app: self)))
             w.title = Config.appName
@@ -133,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     /// Coming back from System Settings or another app: permission and displays may have changed.
-    func windowDidBecomeKey(_ notification: Notification) { refresh() }
+    func windowDidBecomeKey(_ notification: Notification) { refresh(); refreshMoved() }
 
     // MARK: Actions (shared by the menu and the window)
 
@@ -145,6 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             let outcome = await Arranger.arrange(interactive: interactive, forced: forced)
             busy = false
             refresh()
+            refreshMoved()
             finish(outcome.summary, ok: outcome.arranged)
             guard interactive, !outcome.cancelled else { return }
             if !trusted {
@@ -172,7 +216,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if let existing = profiles.first(where: { $0.name == name }) { return update(existing) }   // same name: replace, after asking
         let profile = snapshot(named: name)
         guard edit({ $0.append(profile) }) else { return }
-        Store.prefer(profile)
+        Store.prefer(profile, on: displays)
+        refresh(); refreshMoved()
         finish("Saved “\(name)” (\(profile.windows.count) windows)", ok: true)
     }
 
@@ -185,7 +230,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         var fresh = snapshot(named: old.name)
         fresh.id = old.id
         guard edit({ all in if let i = all.firstIndex(where: { $0.id == old.id }) { all[i] = fresh } }) else { return }
-        Store.prefer(fresh)
+        Store.prefer(fresh, on: displays)
+        refresh(); refreshMoved()
         finish("Updated “\(old.name)” (\(fresh.windows.count) windows)", ok: true)
     }
 
@@ -200,7 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     func setJevKey() {
-        guard let key = UI.prompt("TypeSafe Jev API key", "With a key, the names of your displays and the titles of windows \(Config.appName) can't match on its own are sent to \(Config.jevEndpoint.host ?? "TypeSafe") when you arrange. Saving a key is your agreement to that. The key itself stays in your login keychain.", secure: true) else { return }
+        guard let key = UI.prompt("TypeSafe Jev API key", "With a key, details of your displays, the names of the apps and profiles involved, and the titles of windows \(Config.appName) can't match on its own are sent to \(Config.jevEndpoint.host ?? "TypeSafe") when you arrange. Saving a key is your agreement to that. The key itself stays in your login keychain.", secure: true) else { return }
         guard Jev.store(key) else {
             _ = UI.confirm("Couldn't save the Jev key", "The login keychain refused it. Unlock the keychain and try again.", cancel: nil)
             return
@@ -236,6 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// and only after macOS has finished reshuffling windows on its own.
     @objc private func screensChanged() {
         refresh()
+        refreshMoved()      // the count must not outlive the layout it was taken for
         guard setKey != lastKey else { return }
         lastKey = setKey
         pending?.cancel()

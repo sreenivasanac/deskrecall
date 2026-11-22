@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>DeskRecall</title>
+    <item>
+      <title>Version 0.5.0</title>
+      <pubDate>Sun, 22 Nov 2026 08:02:24 +0000</pubDate>
+      <sparkle:version>0.5.0</sparkle:version>
+      <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<ul>
+  <li>The menu now says which layout you are on and how many windows have moved since, with one click to put them back or to keep the change.</li>
+  <li>The window has a sidebar: your profiles, Settings and About in one place.</li>
+  <li>A short welcome guide on first launch.</li>
+  <li>Updates from inside the app, plus Report a Bug, Send Feedback and Copy Diagnostics under Help.</li>
+</ul>]]></description>
+      <enclosure url="https://github.com/sreenivasanac/deskrecall/releases/download/v0.5.0/DeskRecall.zip" type="application/octet-stream" sparkle:edSignature="RNczdpY3jB5CQg+203tc38gU6AwqN+HoYxcTBXEzuEqvb8BxVg3XGcyx5T48PN+bEzsY43mfyIawnk994MyJCQ==" length="2038437" />
+    </item>
+  </channel>
+</rss>

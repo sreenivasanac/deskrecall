@@ -96,7 +96,9 @@ def check(baseline_plan, mess):
     want = now.windows
     # The starting layout must really be the one asked for, or a pass would prove nothing.
     for name, (_, space, minimized) in plan.items():
-        got = want["dr-test-%s.txt" % name]
+        got = want.get("dr-test-%s.txt" % name)
+        if got is None:     # closed by hand, or the app did not answer in time
+            return [f"setup failed: test window {name} is not there"], ""
         on = now.displays[got["display"]][4][got["desktop"] - 1] if got["display"] is not None else None
         if on != space or got["minimized"] != minimized:
             return [f"setup failed: {name} is on desktop {on}, minimized={got['minimized']}; wanted {space}, {minimized}"], ""
@@ -105,9 +107,16 @@ def check(baseline_plan, mess):
     mess(desk, w)
     time.sleep(1)
     messed = Desk().windows
+    noticed = cli("--moved", PROFILE).strip()
     summary = cli("--arrange", "--profile", PROFILE).strip()
     time.sleep(1.5)
     problems = differences(want, Desk().windows)
+    # What the menu says about the layout: changed after the mess, in place again after Arrange.
+    if noticed in ("", "moved 0"):
+        problems.append(f"the app did not notice the changed layout ({noticed or 'no answer'})")
+    after = cli("--moved", PROFILE).strip()
+    if after != "moved 0":
+        problems.append(f"after Arrange the app still reports a changed layout ({after or 'no answer'})")
     if not differences(want, messed):
         problems.append("the mess step changed nothing, so this proved nothing")
     return problems, summary

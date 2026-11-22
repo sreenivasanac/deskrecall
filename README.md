@@ -8,9 +8,10 @@ the right size, minimized or not.
 
 [Website](https://deskrecall.pragnyalabs.com) ·
 [Download for macOS](https://github.com/sreenivasanac/deskrecall/releases/latest/download/DeskRecall.zip) ·
-[Install notes](#install)
+[Install notes](#install) ·
+[Privacy](https://deskrecall.pragnyalabs.com/privacy.html)
 
-![The Profiles window: a saved layout drawn display by display and desktop by desktop](site/images/profiles.png)
+![The DeskRecall window: profiles in a sidebar, the current layout marked as changed, each desktop drawn with its windows](site/images/profiles.png)
 
 ## The problem
 
@@ -34,6 +35,10 @@ After that, **Arrange** (or simply plugging a display in) does the rest:
   are not looking at;
 - minimizes what was minimized, and brings back what was not.
 
+Once a layout is applied, the menu keeps track of it: it names the layout you are on and says how
+many windows have moved since. From there it is one click to put them back, or to keep the change
+by updating the profile.
+
 Apps that aren't open are skipped. Nothing is launched and nothing is closed.
 
 ## How it differs
@@ -48,22 +53,50 @@ Apps that aren't open are skipped. Nothing is launched and nothing is closed.
 | Matching windows whose titles changed | manual "linking" / patterns | title regex, z-order | a decision model (Jev) |
 | Snapping, halves/thirds, shortcuts | no | yes | no (use Rectangle for that) |
 
+Moom, BetterTouchTool, Raycast and Magnet are window managers first: very good at placing the
+window in front of you with a shortcut or a drag, which DeskRecall does not do at all. Three of them
+can also save a layout. This is how far that goes, according to each maker's own documentation:
+
+| | Moom 4 | BetterTouchTool | Raycast | Magnet | DeskRecall |
+| --- | --- | --- | --- | --- | --- |
+| Saves a whole layout | yes | yes, as an action you set up | yes, on the paid plan; up to eight windows per display | no, snapping only | yes, every open window |
+| Applies it when displays change | yes | with a display trigger you build yourself | no, you run the layout | no | yes, or with one click |
+| Windows on other desktops (Spaces) | no: one layout per desktop, for the desktop you are looking at | no: the current desktop only | no: a command moves the focused window one desktop over | no | yes: every window goes back to its own desktop, without switching to it, and missing desktops are added |
+| Minimized windows | left out of a layout | no | no (a layout can minimize what it doesn't place) | no | minimized again, or brought back out, as saved |
+| Telling one app's windows apart | by app, then its own matching | not documented | by app | n/a | the same window, file, title or browser profile; Jev for what is left |
+| Two monitors of one model | by arrangement only | by name or position | not documented | n/a | by macOS's identifier and manufacture date, then position |
+| Tells you the layout has drifted | no | no | no | no | yes: how many windows moved, with put back or keep |
+| Snapping, grids, shortcuts, gestures | yes | yes, and much more | yes | yes | no (keep yours; DeskRecall works beside it) |
+
+Checked in November 2026 against the [Moom help](https://manytricks.com/moom/help/customactions.html),
+the [BetterTouchTool forum](https://community.folivora.ai/t/absolute-monitor-targeting-multi-monitor-workflow-reliability/45946)
+(answers from its developer), the [Raycast manual](https://manual.raycast.com/window-management) and
+the [Magnet site](https://magnet.crowdcafe.com/). These apps change; open an issue if a cell is out of date.
+
 DeskRecall is not a window snapper. It does one thing: put a whole working layout back.
 
 ## The window
 
-Open it from the menu (**Profiles…** or **Settings…**) or by opening the app again.
+Open it from the menu (**Profiles…** or **Settings…**) or by opening the app again. The sidebar
+lists your profiles, with Settings and About under them. On first launch a short Welcome guide
+walks through the permission, the first profile and the optional Jev key.
 
-**Profiles** shows every saved layout as a picture: how the displays were arranged, each desktop
+**A profile** is shown as a picture: how the displays were arranged, each desktop
 drawn to scale with its windows, and the minimized ones listed underneath. It is view only on
 purpose. To change a layout, arrange the real windows and press **Update with Current Layout…**.
+The profile you are on is marked *Current*, with the number of windows that have moved.
 
 **Settings** holds the switches: arrange automatically when displays change, what to do with a
-window the app is unsure about, launch at login, the Accessibility permission and the Jev key.
+window the app is unsure about, launch at login, the Accessibility permission, the Jev key and
+update checks.
+
+**About** has the version, links, and Report a Bug, Send Feedback and Copy Diagnostics.
 
 | Dark mode | Settings |
 | --- | --- |
 | ![Profiles window in dark mode](site/images/profiles-dark.png) | ![Settings pane](site/images/settings.png) |
+
+![The Welcome guide shown on first launch](site/images/welcome.png)
 
 (The screenshots use made-up windows.)
 
@@ -108,8 +141,10 @@ typed answer with a calibrated confidence:
 - **Which display stands in for which?** When a profile is replayed on different monitors.
 - **Which window is which?** When an app has several windows and nothing above settles it.
 
-For those questions the names of your displays and the titles of the windows in question are sent
-to `api.typesafe.ai`. Nothing else is sent, and nothing at all without a key.
+For those questions details of your displays, the names of the apps and profiles involved, and the
+titles of the windows in question are sent to `api.typesafe.ai`. None of it is sent without a key.
+The [privacy page](https://deskrecall.pragnyalabs.com/privacy.html) lists everything the app stores
+and sends.
 
 A low-confidence answer about a window is a conflict, and **Settings → When unsure which window is
 which** says what happens: *Ask me* (one dialog with the best guess preselected), *Use the best
@@ -141,7 +176,7 @@ can't settle are paired in window order, and you pick the profile yourself when 
 | macOS | 14 (Sonoma) or later. Moving windows between desktops needs macOS 26.4 or later; on older versions displays, positions, sizes and minimized state are still restored. |
 | Mac | Apple Silicon or Intel (universal app). Tested on Apple Silicon with macOS 26.7; Intel is untested. |
 | Permission | Accessibility only. |
-| Network | None, unless you add a Jev key. |
+| Network | A daily check for a new version (can be switched off). Nothing else, unless you add a Jev key. |
 | Distribution | Outside the Mac App Store only: desktops are handled through a private macOS framework. |
 
 ### Build from source
@@ -161,13 +196,23 @@ each rebuild. `RELEASE=1` also notarizes and staples when a Developer ID certifi
 
 ## Menu
 
-- **Arrange** — find the profile for the current displays and arrange.
-- **Apply Profile ▸** — arrange from a specific profile (ticked: saved on the displays connected now).
-- **Save Layout as New Profile…** / **Update “…” with Current Layout…** (asks first; there is no undo).
-  Saving under an existing name updates that profile.
+- **Layout: “…”** — the layout these displays are on, and whether any of its windows has moved since, and how many.
+- **Restore “…”** — put the windows back where that layout has them. Reads **Put Windows Back**
+  once something has moved. With no profile for the connected displays it reads **Arrange from the
+  Closest Profile**.
+- **Update “…” with Current Layout…** — keep the change instead (asks first; there is no undo).
+  Reads **Keep This Layout** once something has moved.
+- **Save Layout as New Profile…** — saving under an existing name updates that profile.
+- **Switch to Profile ▸** — arrange from another profile. A tick marks the layout in force, a dash
+  the same layout after windows have moved.
 - **Profiles…** / **Settings…** — the window.
 - **Auto-arrange When Displays Change** — arranges a few seconds after a monitor is connected or
   removed. Also in Settings; it is in the menu for the moment before you plug into a projector.
+- **Help ▸** — the Welcome guide, the website, **Report a Bug…** (a GitHub issue, filled in),
+  **Send Feedback…** (an email) and **Copy Diagnostics**. Diagnostics hold versions, displays,
+  counts and settings, never window titles or names. Report a Bug passes them to GitHub when it
+  opens the issue page; nothing else leaves your Mac.
+- **Check for Updates…** — the app also checks about once a day and offers to install a new version.
 
 ## Command line
 
@@ -177,7 +222,8 @@ Accessibility belongs to the app bundle, so run commands through it:
 open -W -n -a DeskRecall --args --arrange --out /tmp/deskrecall.txt
 ```
 
-`--arrange [--profile NAME]`, `--save NAME`, `--dump [--verbose]` (displays, desktops and windows as
+`--arrange [--profile NAME]`, `--save NAME`, `--moved NAME` (how many of a profile's windows are out of
+place), `--dump [--verbose]` (displays, desktops and windows as
 the app sees them), `--selfcheck` (logic tests; runs straight from `.build/debug/DeskRecall`).
 
 For checking what a macOS release still allows, one step on one window (ids from `--dump`):
@@ -202,7 +248,7 @@ uv run python scripts/live-test.py              # every case the connected displ
 uv run python scripts/live-test.py frame dock   # only the named cases
 ```
 
-They open three TextEdit windows, save a layout, disturb it, run Arrange and check that every window
+They open three TextEdit windows, save a layout, disturb it, check the app reports the change, run Arrange and check that every window
 is back. Cases: `frame` (moved and resized), `restore` (minimized now, on screen in the profile),
 `dock` (minimized in the profile), `desktop` (wrong desktop, including one not showing),
 `desktop-dock` (minimized and on the wrong desktop), `display` (wrong display), `new-desktop` (the
@@ -222,12 +268,14 @@ closed before you start.
   desktop and tells you.
 - Two monitors of one model with the same serial, the same manufacture date, the same macOS
   identifier and the same arrangement cannot be told apart. The profile last used wins; switch with
-  **Apply Profile ▸**.
+  **Switch to Profile ▸**.
 - The browser-profile rule covers Chromium browsers. Safari, Firefox and Edge name profiles
   differently or not at all; their windows fall through to title matching and Jev.
 - The Jev key lives in your login keychain. If you used a version before 0.4, macOS asks for your
   keychain password once, the first time the key is needed, because the app's signature changed;
   it also asks you to grant Accessibility again.
+- Versions before 0.5 have no updater. If you installed one, download 0.5 once by hand; later
+  versions arrive through **Check for Updates…**.
 - With "Displays have separate Spaces" switched off in System Settings, one row of desktops spans
   every display. The code handles that case but it has not been tested on a real Mac.
 - Full-screen windows are left alone. So are windows that are open but not in the profile.
@@ -242,8 +290,15 @@ closed before you start.
 `Sources/DeskRecall/` — `Config` (names, thresholds, settings keys), `Displays` (identity and
 pairing), `Spaces` (private API), `Windows` (Accessibility), `Profiles` (saved layouts and how well
 one fits the displays), `Jev`, `Arranger` (pick the profile, match, move), `App` (menu and actions),
-`Dialogs` (alerts), `ProfilesWindow` and `SettingsView` (the SwiftUI window).
+`Dialogs` (alerts), `ProfilesWindow`, `SettingsView` and `Panes` (the SwiftUI window: profiles, settings, Welcome and
+About), `Updates` (Sparkle, the one dependency), `Diagnostics` (bug reports and feedback).
 
-`scripts/build-app.sh` builds, signs and installs (`RELEASE=1` writes the release archive instead);
+`scripts/build-app.sh` builds, signs and installs (`RELEASE=1` writes the notarized release archive
+and the update feed `site/appcast.xml` instead);
 `scripts/make-icon.swift` draws the icon; `site/` is the website at
 [deskrecall.pragnyalabs.com](https://deskrecall.pragnyalabs.com).
+
+## Licence
+
+[MIT](LICENSE). The software comes with no warranty; see the
+[terms](https://deskrecall.pragnyalabs.com/terms.html).

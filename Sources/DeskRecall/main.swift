@@ -168,6 +168,12 @@ if let name = value(after: "--save") {
     print("saved \(name): \(profile.windows.count) windows")
     exit(0)
 }
+// `--moved <name>`: how many of that profile's windows are not where it has them (what the menu reports).
+if let name = value(after: "--moved") {
+    guard let profile = Store.load().first(where: { $0.name == name }) else { print("no such profile"); exit(1) }
+    print("moved", MainActor.assumeIsolated { Arranger.moved(from: profile, displays: Displays.current(), live: Windows.capture()) })
+    exit(0)
+}
 if args.contains("--arrange") {
     Task { @MainActor in
         let forced = value(after: "--profile").flatMap { name in Store.load().first { $0.name == name } }

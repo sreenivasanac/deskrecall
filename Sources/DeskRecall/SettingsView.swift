@@ -6,6 +6,7 @@ struct SettingsPane: View {
     @ObservedObject var app: AppDelegate
     @AppStorage(Keys.autoArrange) private var autoArrange = true
     @AppStorage(Keys.whenUnsure) private var whenUnsure = Unsure.ask
+    @State private var automaticUpdates = Updates.automatic
 
     var body: some View {
         Form {
@@ -43,18 +44,25 @@ struct SettingsPane: View {
                     HStack {
                         Text(app.hasJevKey ? "Saved in your login keychain" : "None").foregroundStyle(.secondary)
                         Button(app.hasJevKey ? "Change…" : "Add…") { app.setJevKey() }
+                        if !app.hasJevKey { Link("Get a key", destination: Config.jevSignup) }
                     }
                 }
             } header: {
                 Text("TypeSafe Jev")
             } footer: {
-                note("Jev is the decision model that settles the unclear cases: which profile suits a new display setup, which display stands in for a missing one, which window is which. For those questions the names of your displays and the titles of the windows in question are sent to \(Config.jevEndpoint.host ?? "TypeSafe"). Without a key nothing is sent, and same-app windows are paired in order.")
+                note("Jev is the decision model that settles the unclear cases: which profile suits a new display setup, which display stands in for a missing one, which window is which. For those questions details of your displays, the names of the apps and profiles involved, and the titles of the windows in question are sent to \(Config.jevEndpoint.host ?? "TypeSafe"). Without a key nothing is sent, and same-app windows are paired in order.")
             }
 
-            Section("About") {
-                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development build")
-                Link("Website", destination: Config.website)
-                Link("Source code on GitHub", destination: Config.repository)
+            if Updates.available {
+                Section {
+                    Toggle("Check for updates automatically", isOn: $automaticUpdates)
+                        .onChange(of: automaticUpdates) { Updates.automatic = automaticUpdates }
+                    LabeledContent("Version \(Diagnostics.version)") { Button("Check Now…") { Updates.check() } }
+                } header: {
+                    Text("Updates")
+                } footer: {
+                    note("About once a day \(Config.appName) asks \(Config.website.host ?? "its website") whether a newer version exists. Nothing about you or your windows is sent.")
+                }
             }
         }
         .formStyle(.grouped)

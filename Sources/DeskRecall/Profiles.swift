@@ -101,12 +101,31 @@ enum Store {
 
     /// Several profiles can be saved on the same monitors (say "Work" and "Evening"). Arrange then
     /// uses the one last saved or applied there, so it stays predictable.
-    static func preferred(for setKey: String) -> UUID? {
-        (UserDefaults.standard.dictionary(forKey: Keys.preferred)?[setKey] as? String).flatMap { UUID(uuidString: $0) }
+    static func preferred(for key: String) -> UUID? {
+        (UserDefaults.standard.dictionary(forKey: Keys.preferred)?[key] as? String).flatMap { UUID(uuidString: $0) }
     }
-    static func prefer(_ profile: Profile) {
+    /// The profiles saved on these very monitors that fit them best; several when they tie.
+    static func candidates(_ profiles: [Profile], for displays: [DisplayInfo]) -> [Profile] {
+        let scored = profiles.compactMap { p in p.closeness(to: displays).map { (profile: p, score: $0) } }
+        let best = scored.map(\.score).max()
+        return scored.filter { $0.score == best }.map(\.profile)
+    }
+    /// The layout this display setup is on: the fitting profile last saved or applied on these very
+    /// monitors, whatever its score (the user chose it); failing that the one best fit, or among
+    /// tied fits the one a version before 0.5 recorded for this kind of setup.
+    static func current(_ profiles: [Profile], for displays: [DisplayInfo]) -> Profile? {
+        if let id = preferred(for: placeKey(displays)), let chosen = profiles.first(where: { $0.id == id && $0.fits(displays) }) { return chosen }
+        let same = candidates(profiles, for: displays)
+        return same.count == 1 ? same[0] : same.first { $0.id == preferred(for: Displays.setKey(displays)) }
+    }
+    /// The connected monitors as macOS itself tells them apart, so a choice made at home does not
+    /// carry over to the same monitor model at the office.
+    private static func placeKey(_ displays: [DisplayInfo]) -> String {
+        Displays.setKey(displays) + "|" + displays.map(\.uuid).sorted().joined(separator: ",")
+    }
+    static func prefer(_ profile: Profile, on displays: [DisplayInfo]) {
         var all = UserDefaults.standard.dictionary(forKey: Keys.preferred) ?? [:]
-        all[profile.setKey] = profile.id.uuidString
+        all[placeKey(displays)] = profile.id.uuidString
         UserDefaults.standard.set(all, forKey: Keys.preferred)
     }
 }

@@ -188,13 +188,14 @@
         <li><h3>Arrange</h3><p>Click Arrange, or just plug a display in. DeskRecall finds the profile for the displays connected now and moves every window back.</p></li>
       </ol>
       <figure>
-        <img src="images/profiles.png" width="2024" height="1520" alt="The Profiles window. A saved layout is drawn display by display and desktop by desktop, with each window's app icon, and a small picture of how the displays are arranged.">
+        <img src="images/profiles.png" width="1960" height="1336" alt="The DeskRecall window, with the profiles, Settings and About in a sidebar. The current profile is marked as having three windows moved, with buttons to put them back or keep the change. A saved layout is drawn display by display and desktop by desktop, with each window's app icon, and a small picture of how the displays are arranged.">
         <figcaption>Every profile is a picture you can check: the displays as they were arranged, each desktop to scale, and what was minimized. The windows shown are made up.</figcaption>
       </figure>
     </section>
 
     <section id="differs">
-      <h2>How it differs from Stay and Rectangle Pro</h2>
+      <h2>How it differs</h2>
+      <h3>From Stay and Rectangle Pro</h3>
       <p>Window managers snap windows into halves and thirds. Layout savers put windows back on a display. DeskRecall does one job they leave undone: it puts a whole working layout back, across desktops, including what was minimized.</p>
       <div class="scroll">
         <table>
@@ -210,6 +211,25 @@
           </tbody>
         </table>
       </div>
+
+      <h3 style="margin-top:3rem">And from Moom, BetterTouchTool, Raycast and Magnet</h3>
+      <p>These are window managers first: they are very good at placing the window in front of you with a shortcut or a drag, and DeskRecall does none of that. Three of them can also save a layout. This is how far that goes, according to each maker's own documentation.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th></th><th>Moom 4</th><th>BetterTouchTool</th><th>Raycast</th><th>Magnet</th><th>DeskRecall</th></tr></thead>
+          <tbody>
+            <tr><th>Saves a whole layout</th><td>Yes</td><td>Yes, as an action you set up</td><td>Yes, on the paid plan; up to eight windows per display</td><td class="no">No, snapping only</td><td class="ours">Yes, every open window</td></tr>
+            <tr><th>Applies it when displays change</th><td>Yes</td><td>With a display trigger you build yourself</td><td class="no">No, you run the layout</td><td class="no">No</td><td class="ours">Yes, or with one click</td></tr>
+            <tr><th>Windows on other desktops (Spaces)</th><td class="no">No. One layout per desktop, saved and applied on the desktop you are looking at</td><td class="no">No. Layouts cover the current desktop only</td><td class="no">No. A command moves the focused window one desktop over</td><td class="no">No</td><td class="ours">Yes: every window goes back to its own desktop, without switching to it, and missing desktops are added</td></tr>
+            <tr><th>Minimized windows</th><td class="no">Left out of a layout</td><td class="no">No</td><td class="no">No. A layout can minimize the windows it doesn't place</td><td class="no">No</td><td class="ours">Minimized again, or brought back out, as saved</td></tr>
+            <tr><th>Telling one app's windows apart</th><td>By app, then its own matching</td><td>Not documented</td><td>By app</td><td>Not applicable</td><td class="ours">The same window, the same file, the same title, the same browser profile; a decision model for what is left</td></tr>
+            <tr><th>Two monitors of one model</th><td>Told apart by arrangement only</td><td>By name or position</td><td>Not documented</td><td>Not applicable</td><td class="ours">By macOS's identifier and manufacture date, then position</td></tr>
+            <tr><th>Tells you the layout has drifted</th><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="ours">Yes: how many windows have moved, with put back or keep</td></tr>
+            <tr><th>Snapping, grids, shortcuts, gestures</th><td>Yes</td><td>Yes, and much more</td><td>Yes</td><td>Yes</td><td class="ours">No. Keep yours; DeskRecall works beside it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:1rem;font-size:0.95rem;color:var(--muted)">Checked in November 2026 against the <a href="https://manytricks.com/moom/help/customactions.html">Moom help</a>, the <a href="https://community.folivora.ai/t/absolute-monitor-targeting-multi-monitor-workflow-reliability/45946">BetterTouchTool forum</a> (answers from its developer), the <a href="https://manual.raycast.com/window-management">Raycast manual</a> and the <a href="https://magnet.crowdcafe.com/">Magnet site</a>. These apps change; tell me if a cell is out of date.</p>
     </section>
 
     <section id="identity">
@@ -235,10 +255,10 @@
         </div>
       </div>
       <figure class="pair">
-        <img src="images/settings.png" width="2024" height="1520" alt="The Settings pane: arrange automatically when displays change, what to do when unsure which window is which, launch at login, Accessibility permission, and the TypeSafe Jev key.">
-        <img src="images/profiles-dark.png" width="1936" height="1432" alt="The Profiles window in dark mode.">
+        <img src="images/settings.png" width="1960" height="1336" alt="The Settings pane: arrange automatically when displays change, what to do when unsure which window is which, launch at login, Accessibility permission, the TypeSafe Jev key, and update checks.">
+        <img src="images/profiles-dark.png" width="1960" height="1336" alt="The Profiles window in dark mode.">
       </figure>
-      <p style="margin-top:1.5rem">The decision model is <a href="https://typesafe.ai">TypeSafe Jev</a>, and it is optional. With a key, the names of your displays and the titles of the windows in question are sent to it for the unclear cases only. Without a key nothing leaves your Mac.</p>
+      <p style="margin-top:1.5rem">The decision model is <a href="https://typesafe.ai">TypeSafe Jev</a>, and it is optional. With a key, details of your displays, the names of the apps and profiles involved, and the titles of the windows in question are sent to it, for the unclear cases only. Without a key none of that leaves your Mac. The <a href="privacy.html">privacy page</a> lists everything the app stores and sends.</p>
     </section>
 
     <section id="install">
@@ -264,7 +284,7 @@ scripts/build-app.sh</pre>
               <tr><th>macOS</th><td>14 (Sonoma) or later. Moving windows between desktops needs macOS 26.4 or later; older versions still restore display, position, size and minimized state.</td></tr>
               <tr><th>Mac</th><td>Apple Silicon or Intel. Tested on Apple Silicon with macOS 26.7; Intel is untested.</td></tr>
               <tr><th>Permission</th><td>Accessibility only.</td></tr>
-              <tr><th>Network</th><td>None, unless you add a TypeSafe Jev key.</td></tr>
+              <tr><th>Network</th><td>A daily check for a new version, which you can switch off. Nothing else, unless you add a TypeSafe Jev key.</td></tr>
               <tr><th>Mac App Store</th><td>Not available there: desktops are handled through a private macOS framework.</td></tr>
             </tbody>
           </table>
@@ -275,7 +295,7 @@ scripts/build-app.sh</pre>
 
   <footer>
     <span>DeskRecall, a Pragnya Labs project. This page counts visits anonymously, without cookies.</span>
-    <span><a href="https://github.com/sreenivasanac/deskrecall">Source</a> &nbsp; <a href="https://github.com/sreenivasanac/deskrecall/releases">Releases</a> &nbsp; <a href="https://github.com/sreenivasanac/deskrecall/issues">Report a problem</a></span>
+    <span><a href="https://github.com/sreenivasanac/deskrecall">Source</a> &nbsp; <a href="https://github.com/sreenivasanac/deskrecall/releases">Releases</a> &nbsp; <a href="https://github.com/sreenivasanac/deskrecall/issues">Report a problem</a> &nbsp; <a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a></span>
   </footer>
 </div>
 

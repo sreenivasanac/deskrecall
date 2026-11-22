@@ -1,51 +1,79 @@
 import SwiftUI
 
-/// The app's window: a Profiles pane showing every saved profile as a picture of its displays and
-/// desktops, and a Settings pane. Profiles are view only by design: a layout is changed by
-/// arranging the real windows and pressing Update.
+/// The app's window. One sidebar lists the saved profiles and, under them, Settings and About.
+/// A profile is shown as a picture of its displays and desktops, view only by design: a layout
+/// is changed by arranging the real windows and pressing Update.
 struct ProfilesView: View {
     @ObservedObject var app: AppDelegate
     @State private var selection: Profile.ID?
+    @AppStorage(Keys.onboarded) private var onboarded = false
 
-    /// The picked profile; before any pick, the one made for the displays connected now.
+    private enum Row: Hashable { case profile(Profile.ID), pane(AppDelegate.Pane) }
+
+    /// The picked profile; before any pick, the layout the connected displays are on.
     private var selected: Profile? {
-        app.profiles.first { $0.id == selection } ?? app.matching.first ?? app.profiles.first
+        app.profiles.first { $0.id == selection } ?? app.current ?? app.matching.first ?? app.profiles.first
+    }
+    private var row: Binding<Row?> {
+        Binding(get: { app.pane == .profiles ? selected.map { .profile($0.id) } ?? .pane(.profiles) : .pane(app.pane) },
+                set: { picked in
+                    switch picked {
+                    case .profile(let id): selection = id; app.pane = .profiles
+                    case .pane(let pane): app.pane = pane
+                    case nil: break
+                    }
+                })
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Pane", selection: $app.pane) {
-                ForEach(AppDelegate.Pane.allCases, id: \.self) { Text($0.rawValue) }
-            }
-            .pickerStyle(.segmented).labelsHidden().fixedSize().padding(.vertical, 10)
+        HStack(spacing: 0) {
+            sidebar.frame(width: 230)
             Divider()
-            if !app.trusted { permissionBanner }
-            if app.pane == .settings { SettingsPane(app: app) } else { profilesPane }
+            VStack(spacing: 0) {
+                if !app.trusted && app.pane != .welcome { permissionBanner }
+                switch app.pane {
+                case .welcome: WelcomePane(app: app)
+                case .settings: SettingsPane(app: app)
+                case .about: AboutPane(app: app)
+                case .profiles: profilesPane
+                }
+            }
         }
-        .frame(minWidth: 760, minHeight: 480)
+        .frame(minWidth: 820, minHeight: 500)
         // An app without a Dock icon has no main menu, so ⌘W needs a home of its own.
         .background(Button("") { NSApp.keyWindow?.performClose(nil) }.keyboardShortcut("w").opacity(0))
     }
 
-    @ViewBuilder private var profilesPane: some View {
-        if app.profiles.isEmpty {
-            emptyState
-        } else {
-            HStack(spacing: 0) {
-                List(app.profiles, selection: Binding(get: { selected?.id }, set: { selection = $0 })) { p in
+    private var sidebar: some View {
+        List(selection: row) {
+            Section("Profiles") {
+                ForEach(app.profiles) { p in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(p.name).lineLimit(2)
-                        Text((p.fits(app.displays) ? "Connected now · " : "") + "\(p.windows.count) windows")
-                            .font(.caption).foregroundStyle(.secondary)
+                        // The dot carries the warning: orange text would not read on the selected row.
+                        (Text(p.id == app.current?.id && app.moved > 0 ? "● " : "").foregroundColor(.orange) + Text(caption(p)).foregroundColor(.secondary)).font(.caption)
                     }
                     .padding(.vertical, 3)
+                    .tag(Row.profile(p.id))
                 }
-                .listStyle(.sidebar)
-                .frame(width: 230)
-                Divider()
-                if let profile = selected { ProfileDetail(app: app, profile: profile).id(profile.id) }
+                if app.profiles.isEmpty { Label("None yet", systemImage: "plus.rectangle.on.rectangle").tag(Row.pane(.profiles)) }
+            }
+            Section(Config.appName) {
+                if !onboarded || app.pane == .welcome { Label("Welcome", systemImage: "hand.wave").tag(Row.pane(.welcome)) }
+                Label("Settings", systemImage: "gearshape").tag(Row.pane(.settings))
+                Label("About", systemImage: "info.circle").tag(Row.pane(.about))
             }
         }
+        .listStyle(.sidebar)
+    }
+
+    private func caption(_ p: Profile) -> String {
+        if p.id == app.current?.id { return app.moved > 0 ? "Current · \(app.moved) moved" : "Current · nothing moved" }
+        return (p.fits(app.displays) ? "For these displays · " : "") + "\(p.windows.count) windows"
+    }
+
+    @ViewBuilder private var profilesPane: some View {
+        if let profile = selected { ProfileDetail(app: app, profile: profile).id(profile.id) } else { emptyState }
         Divider()
         HStack {
             if app.busy { ProgressView().controlSize(.small) }
@@ -113,15 +141,22 @@ private struct ProfileDetail: View {
             Text("Saved \(profile.savedAt.formatted(date: .abbreviated, time: .shortened)) · \(profile.windows.count) windows"
                  + (minimizedCount > 0 ? ", \(minimizedCount) minimized" : ""))
                 .foregroundStyle(.secondary)
-            if profile.fits(app.displays) {
-                Label("Made for the displays connected now. Arrange uses it as saved.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            let isCurrent = profile.id == app.current?.id
+            if isCurrent && app.moved > 0 {
+                Label("\(app.moved) window\(app.moved == 1 ? " has" : "s have") moved since this layout was applied. Put them back, or keep the change by updating the profile.",
+                      systemImage: "exclamationmark.circle.fill").foregroundStyle(.orange)
+            } else if isCurrent {
+                Label("The current layout. None of its open windows has moved.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            } else if profile.fits(app.displays) {
+                Label("Made for the displays connected now, but not the layout in use.", systemImage: "rectangle.on.rectangle").foregroundStyle(.secondary)
             } else {
                 Label("Made for a different display setup. Applied here, it is adapted to the displays connected now.", systemImage: "arrow.triangle.2.circlepath")
                     .foregroundStyle(.secondary)
             }
             HStack {
-                Button("Apply Now") { app.arrange(interactive: true, forced: profile) }.buttonStyle(.borderedProminent)
-                Button("Update with Current Layout…") { app.update(profile) }
+                Button(isCurrent ? (app.moved > 0 ? "Put Windows Back" : "Restore") : "Switch to This Layout") { app.arrange(interactive: true, forced: profile) }
+                    .buttonStyle(.borderedProminent)
+                Button(isCurrent && app.moved > 0 ? "Keep This Layout (Update)…" : "Update with Current Layout…") { app.update(profile) }
                 Button("Rename…") { app.rename(profile) }
                 Button("Delete…", role: .destructive) { app.delete(profile) }
             }

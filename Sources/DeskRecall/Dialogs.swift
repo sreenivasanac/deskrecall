@@ -55,11 +55,11 @@ enum UI {
 /// A menu item that runs a closure.
 final class ActionItem: NSMenuItem {
     private let run: () -> Void
-    init(_ title: String, checked: Bool = false, _ run: @escaping () -> Void) {
+    init(_ title: String, checked: Bool = false, state: NSControl.StateValue? = nil, _ run: @escaping () -> Void) {
         self.run = run
         super.init(title: title, action: #selector(fire), keyEquivalent: "")
         target = self
-        state = checked ? .on : .off
+        self.state = state ?? (checked ? .on : .off)
     }
     required init(coder: NSCoder) { fatalError("not used") }
     @objc private func fire() { run() }

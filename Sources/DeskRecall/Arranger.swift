@@ -50,10 +50,8 @@ enum Arranger {
 
         // 1. Which profile? One saved on exactly these monitors wins. With several, the one whose
         //    monitors are most surely these very units; if that is still a tie, the one last used here.
-        let scored = profiles.compactMap { p in p.closeness(to: displays).map { (profile: p, score: $0) } }
-        let best = scored.map(\.score).max()
-        let same = scored.filter { $0.score == best }.map(\.profile)
-        var chosen = forced ?? (same.count == 1 ? same[0] : same.first { $0.id == Store.preferred(for: Displays.setKey(displays)) })
+        let same = Store.candidates(profiles, for: displays)
+        var chosen = forced ?? Store.current(profiles, for: displays)
         if chosen == nil {
             let pick = await chooseProfile(among: same.isEmpty ? profiles : same, displays: displays, live: live, interactive: interactive)
             if pick.cancelled { return Outcome(summary: "Arrange cancelled", cancelled: true) }
@@ -62,7 +60,7 @@ enum Arranger {
         }
         guard let profile = chosen else { return Outcome(summary: "No saved profile fits this display setup") }
         let exact = profile.fits(displays)
-        if exact { Store.prefer(profile) }
+        if exact { Store.prefer(profile, on: displays) }
 
         // 2. Which display stands in for which, and which window is which.
         let plan = await match(profile, displays: displays, live: live, exact: exact, interactive: interactive)
@@ -137,27 +135,12 @@ enum Arranger {
             }
         }
 
-        // Open window -> saved slot, app by app.
-        var pairs: [Pair] = []
-        var groups: [(lives: [Int], slots: [Int])] = []       // what is left for Jev
+        // Open window -> saved slot: the rules first, then a question to Jev for each group they leave open.
+        let local = pairLocally(profile, live)
+        var pairs = local.pairs
+        let groups = local.groups
         func open(_ l: Int) -> String { "\"\(live[l].title)\"" + (live[l].minimized ? " (minimized)" : "") }
-        // Windows only ever compete within their own app, and within their own browser profile.
-        let liveByApp = Dictionary(grouping: live.indices, by: { Matching.family(live[$0].bundleID, live[$0].appName, live[$0].title) })
-        let slotsByApp = Dictionary(grouping: profile.windows.indices, by: { Matching.family(profile.windows[$0].bundleID, profile.windows[$0].appName, profile.windows[$0].title) })
-        for (app, appSlots) in slotsByApp {
-            guard var lives = liveByApp[app] else { continue }  // app isn't open: nothing to place, and that's fine
-            var slots = appSlots
-            // Surest evidence first, each rule over every slot before the next rule gets a turn.
-            for same in sameWindow {
-                slots.removeAll { s in
-                    guard let k = lives.firstIndex(where: { same(profile.windows[s], live[$0]) }) else { return false }
-                    pairs.append((lives.remove(at: k), s))
-                    return true
-                }
-            }
-            if lives.isEmpty || slots.isEmpty { continue }
-            if lives.count == 1 && slots.count == 1 { pairs.append((lives[0], slots[0])); continue }
-            groups.append((lives, slots))
+        for (lives, slots) in groups {
             if slots.count == 1 {   // several windows compete for one slot
                 let s = slots[0]
                 questions["s\(s)"] = Jev.choice("The saved layout has this \(profile.windows[s].appName) window: \(describe(profile.windows[s], profile)). Which open window is the same window, or serves the same purpose?",
@@ -240,6 +223,47 @@ enum Arranger {
         return (displayMap, pairs, notes)
     }
 
+    /// The pairs the rules settle on their own, app by app, and the groups (several windows of one
+    /// app that the rules can't tell apart) they leave for Jev.
+    static func pairLocally(_ profile: Profile, _ live: [LiveWindow]) -> (pairs: [Pair], groups: [(lives: [Int], slots: [Int])]) {
+        var pairs: [Pair] = []
+        var groups: [(lives: [Int], slots: [Int])] = []
+        // Windows only ever compete within their own app, and within their own browser profile.
+        let liveByApp = Dictionary(grouping: live.indices, by: { Matching.family(live[$0].bundleID, live[$0].appName, live[$0].title) })
+        let slotsByApp = Dictionary(grouping: profile.windows.indices, by: { Matching.family(profile.windows[$0].bundleID, profile.windows[$0].appName, profile.windows[$0].title) })
+        for (app, appSlots) in slotsByApp {
+            guard var lives = liveByApp[app] else { continue }  // app isn't open: nothing to place, and that's fine
+            var slots = appSlots
+            // Surest evidence first, each rule over every slot before the next rule gets a turn.
+            for same in sameWindow {
+                slots.removeAll { s in
+                    guard let k = lives.firstIndex(where: { same(profile.windows[s], live[$0]) }) else { return false }
+                    pairs.append((lives.remove(at: k), s))
+                    return true
+                }
+            }
+            if lives.isEmpty || slots.isEmpty { continue }
+            if lives.count == 1 && slots.count == 1 { pairs.append((lives[0], slots[0])) } else { groups.append((lives, slots)) }
+        }
+        return (pairs, groups)
+    }
+
+    /// How many of a profile's windows are no longer where the profile has them: what the menu
+    /// reports as "moved". Asks nobody, so only windows the rules identify for certain are counted.
+    /// ponytail: windows only Jev could identify are not counted; ask Jev here if that proves misleading.
+    static func moved(from profile: Profile, displays: [DisplayInfo], live: [LiveWindow]) -> Int {
+        let displayMap = Displays.pair(profile.displays, with: displays)
+        let desktops = Spaces.userSpaces()
+        return pairLocally(profile, live).pairs.filter { l, s in
+            let slot = profile.windows[s], window = live[l]
+            guard let display = displayMap[slot.display] else { return false }
+            if slot.isMinimized != window.minimized { return true }
+            // On a desktop that no longer exists (Arrange would add it), or on another desktop.
+            if slot.space > 0, let row = desktops[display.uuid], !row.isEmpty, slot.space > row.count || window.spaces != [row[slot.space - 1]] { return true }
+            return !window.minimized && !near(window.frame, slot.frame(on: display), Config.driftTolerance)
+        }.count
+    }
+
     /// What makes an open window the one a slot was saved from, surest first.
     private static let sameWindow: [(SavedWindow, LiveWindow) -> Bool] = [
         { $0.windowID == $1.id && $0.pid == $1.pid },                     // never closed since the save
@@ -312,8 +336,7 @@ enum Arranger {
         return "\"\(w.title)\" on \(display)" + (w.space > 0 ? ", desktop \(w.space)" : "") + ", \(Int(w.fw * 100))% wide" + (w.isMinimized ? ", minimized" : "")
     }
 
-    private static func near(_ a: CGRect, _ b: CGRect) -> Bool {
-        let t = Config.frameTolerance
+    private static func near(_ a: CGRect, _ b: CGRect, _ t: CGFloat = Config.frameTolerance) -> Bool {
         return abs(a.minX - b.minX) <= t && abs(a.minY - b.minY) <= t && abs(a.width - b.width) <= t && abs(a.height - b.height) <= t
     }
 }
