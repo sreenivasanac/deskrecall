@@ -80,14 +80,23 @@ echo "signed with: $SIGN_IDENTITY"
 
 if [ -n "${RELEASE:-}" ]; then
   ZIP="build/$APP_NAME.zip"       # one name for every version, so the "latest release" download link never changes
-  rm -f "$ZIP"
-  ditto -c -k --keepParent "$APP" "$ZIP"      # ditto keeps the signature intact; plain zip does not
+  # ditto keeps the symlinks a framework needs; plain zip does not. Without extended attributes:
+  # ditto would store those of each symlink as a "._name" file, which unarchivers other than ditto
+  # leave lying in the Sparkle framework, and macOS then refuses the app as tampered with.
+  pack() { rm -f "$ZIP" && ditto -c -k --norsrc --noextattr --keepParent "$APP" "$ZIP"; }
+  pack
   case "$SIGN_IDENTITY" in
     "Developer ID Application"*)
       xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
       xcrun stapler staple "$APP"             # the ticket travels with the app, so first launch works offline
-      rm -f "$ZIP" && ditto -c -k --keepParent "$APP" "$ZIP"
+      pack
       spctl --assess --type execute -v "$APP"
+      # The archive as a stranger's unarchiver opens it must still be the signed, notarized app.
+      CHECK="$(mktemp -d)"
+      unzip -q "$ZIP" -d "$CHECK"
+      codesign --verify --deep --strict "$CHECK/$APP_NAME.app"
+      spctl --assess --type execute -v "$CHECK/$APP_NAME.app"
+      rm -rf "$CHECK"
       # The update feed that installed copies read: this version, signed with the update key.
       # Publish the archive as release v$VERSION before deploying site/, or the feed points at nothing.
       SIGNATURE="$(.build/artifacts/sparkle/Sparkle/bin/sign_update "$ZIP")"    # sparkle:edSignature="…" length="…"

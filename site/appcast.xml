@@ -4,7 +4,7 @@
     <title>DeskRecall</title>
     <item>
       <title>Version 0.5.1</title>
-      <pubDate>Sun, 22 Nov 2026 22:09:13 +0000</pubDate>
+      <pubDate>Sun, 22 Nov 2026 22:23:59 +0000</pubDate>
       <sparkle:version>0.5.1</sparkle:version>
       <sparkle:shortVersionString>0.5.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
@@ -13,7 +13,7 @@
   <li>A saved Jev key can now be removed under Settings.</li>
   <li>Renaming a profile to a name another profile already has is refused.</li>
 </ul>]]></description>
-      <enclosure url="https://github.com/sreenivasanac/deskrecall/releases/download/v0.5.1/DeskRecall.zip" type="application/octet-stream" sparkle:edSignature="PUTfzU7SUrMhBfur+3FMi9OOdBkntd9+msSwbCyhKYPvZVLzuEhOPvGjQSAXouyb5klc+djJ670XuJRr0nNDCg==" length="2059951" />
+      <enclosure url="https://github.com/sreenivasanac/deskrecall/releases/download/v0.5.1/DeskRecall.zip" type="application/octet-stream" sparkle:edSignature="I4mqUw4GSXjx/DgRsQMdrpR3rCMs3VDdZTFgr9LASTfQPI6XTIcSpa/hI+XUTRsJcUfuucOcmmcJGp68hgD3BQ==" length="1998141" />
     </item>
   </channel>
 </rss>
