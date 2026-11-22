@@ -2,8 +2,8 @@ import Foundation
 import Security
 
 /// TypeSafe Jev: a decision model. It takes state plus typed questions and returns typed answers
-/// with calibrated probabilities, which is what the fuzzy parts of arranging need
-/// ("which saved profile is this setup closest to?", "which saved slot is this window?").
+/// with calibrated probabilities. Optional: with a key it gives a second opinion on the one
+/// question the rules can leave open ("which saved slot is this reopened window?").
 enum Jev {
     struct Answer {
         var choice: String?                    // Choice questions
@@ -18,13 +18,14 @@ enum Jev {
     /// A TYPESAFE_API_KEY environment variable takes precedence, for command-line use.
     /// Read from the keychain once per launch: the menu asks for it every time it opens.
     private static var stored: String?, loaded = false
+    /// The keychain item, without its secret.
+    private static let item: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
+                                              kSecAttrAccount as String: Config.keychainAccount]
     static var apiKey: String? {
         if let env = ProcessInfo.processInfo.environment["TYPESAFE_API_KEY"], !env.isEmpty { return env }
         if loaded { return stored }
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
-                                    kSecAttrAccount as String: Config.keychainAccount, kSecReturnData as String: true]
         var out: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &out)
+        let status = SecItemCopyMatching(item.merging([kSecReturnData as String: true]) { $1 } as CFDictionary, &out)
         // Remember only a definite answer; a keychain that is locked right now is asked again next time.
         loaded = status == errSecSuccess || status == errSecItemNotFound
         guard status == errSecSuccess, let data = out as? Data else { return nil }
@@ -38,21 +39,28 @@ enum Jev {
     static var hasKey: Bool {
         if let env = ProcessInfo.processInfo.environment["TYPESAFE_API_KEY"], !env.isEmpty { return true }
         if loaded { return stored != nil }
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
-                                    kSecAttrAccount as String: Config.keychainAccount]
-        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+        return SecItemCopyMatching(item as CFDictionary, nil) == errSecSuccess
     }
 
     /// Puts the key in the keychain; false when the keychain refused. Deletes and adds rather than
     /// updates, so an item first created by another tool ends up owned by this app (no prompts).
     static func store(_ key: String) -> Bool {
-        let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Config.keychainService,
-                                   kSecAttrAccount as String: Config.keychainAccount]
-        SecItemDelete(base as CFDictionary)
-        let saved = SecItemAdd(base.merging([kSecValueData as String: Data(key.utf8)]) { $1 } as CFDictionary, nil) == errSecSuccess
+        SecItemDelete(item as CFDictionary)
+        let saved = SecItemAdd(item.merging([kSecValueData as String: Data(key.utf8)]) { $1 } as CFDictionary, nil) == errSecSuccess
         stored = saved ? key : nil
         loaded = true
         return saved
+    }
+
+    /// Takes the key out of the keychain: Settings ▸ Remove, and Uninstall. False when the keychain
+    /// refused (locked, say) and the key is therefore still there.
+    @discardableResult
+    static func remove() -> Bool {
+        let status = SecItemDelete(item as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { return false }
+        stored = nil
+        loaded = true
+        return true
     }
 
     static func choice(_ instructions: String, _ options: [String: String]) -> [String: Any] {

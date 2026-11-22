@@ -41,6 +41,24 @@ by updating the profile.
 
 Apps that aren't open are skipped. Nothing is launched and nothing is closed.
 
+## What it decides on its own, and what it never does
+
+DeskRecall moves other apps' windows, so it is worth knowing when it acts without asking.
+
+| Decision | What it does |
+| --- | --- |
+| Which profile to use | The one saved on exactly the connected monitors. With several, the one you last used there. With none, the closest one, and only without asking when it is the single clear match for a setup of the same shape. |
+| Which window is which | A window that stayed open, shows the same file or has the same title is recognised for certain. Reopened windows with changed titles are paired only when one pairing clearly beats the others. |
+| When it is not sure | It follows your setting: ask, use the best guess, or leave the window alone. Arranging on its own after a display change, it never guesses a profile and never asks; with *Ask me* or *Leave* the unsure windows stay where they are, and only *Use the best guess* moves them. |
+| When it acts unasked | Only after the set of connected displays changes, a few seconds later, and only while **Auto-arrange** is on. |
+
+It never launches, quits or closes an app. It never touches full-screen windows, or windows that
+are not in the profile. It never changes a saved profile unless you press Save, Update, Rename or
+Delete. It has no account, no analytics and no crash reporting, and nothing about your windows
+leaves your Mac unless you add a Jev key. The two sections under
+[How it tells things apart](#how-it-tells-things-apart) give the rules in full, and the
+[privacy page](https://deskrecall.pragnyalabs.com/privacy.html) lists everything it stores.
+
 ## How it differs
 
 | | Stay | Rectangle Pro | DeskRecall |
@@ -179,6 +197,14 @@ lists everything the app stores and sends.
    Repeat once per display setup.
 5. Optional: add a TypeSafe Jev key under **Settings** for a second opinion on reopened windows.
 
+### Uninstall
+
+**Settings → Uninstall…** (also under **Help** in the menu) moves the app to the Trash and removes
+what it stored: its settings, its cache, its launch-at-login entry, its Accessibility permission
+and the Jev key if you saved one. It asks whether your saved layouts should go too; left in place,
+they are picked up again if you reinstall. The [privacy page](https://deskrecall.pragnyalabs.com/privacy.html)
+lists the same steps by hand.
+
 ### Requirements and compatibility
 
 | | |
@@ -221,7 +247,7 @@ each rebuild. `RELEASE=1` also notarizes and staples when a Developer ID certifi
 - **Help ▸** — the Welcome guide, the website, **Report a Bug…** (a GitHub issue, filled in),
   **Send Feedback…** (an email) and **Copy Diagnostics**. Diagnostics hold versions, displays,
   counts and settings, never window titles or names. Report a Bug passes them to GitHub when it
-  opens the issue page; Copy Diagnostics sends nothing.
+  opens the issue page; Copy Diagnostics sends nothing. **Uninstall DeskRecall…** is here too.
 - **Check for Updates…** — the app also checks about once a day and offers to install a new version.
 
 ## Command line
@@ -301,7 +327,7 @@ closed before you start.
 pairing), `Spaces` (private API), `Windows` (Accessibility), `Profiles` (saved layouts and how well
 one fits the displays), `Jev`, `Arranger` (pick the profile, match, move), `App` (menu and actions),
 `Dialogs` (alerts), `ProfilesWindow`, `SettingsView` and `Panes` (the SwiftUI window: profiles, settings, Welcome and
-About), `Updates` (Sparkle, the one dependency), `Diagnostics` (bug reports and feedback).
+About), `Updates` (Sparkle, the one dependency), `Diagnostics` (bug reports and feedback), `Uninstall`.
 
 `scripts/build-app.sh` builds, signs and installs (`RELEASE=1` writes the notarized release archive
 and the update feed `site/appcast.xml` instead);

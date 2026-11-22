@@ -14,7 +14,7 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="DeskRecall"                      # keep in sync with Config.swift
 BUNDLE_ID="com.sreenivasanac.deskrecall"
-VERSION="0.5.0"
+VERSION="0.5.1"
 SITE="https://deskrecall.pragnyalabs.com"
 REPO="https://github.com/sreenivasanac/deskrecall"
 # Sparkle checks every update against this key; the private half is in the login keychain of the

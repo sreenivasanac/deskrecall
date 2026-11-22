@@ -20,7 +20,7 @@ struct DisplayInfo: Codable, Hashable {
     /// with equal sorted hardware keys were saved on the same set of monitors.
     var hardwareKey: String { "\(vendor)-\(model)-\(serial)-\(builtin ? "b" : "e")" }
 
-    /// Everything Jev needs to compare monitors, as one line.
+    /// Everything that tells monitors apart, as one line (for `--dump`).
     var summary: String {
         "\(name) (\(builtin ? "built-in" : "external"), \(width)x\(height), at x=\(x) y=\(y), vendor \(vendor) model \(model) serial \(serial)"
             + (made.map { ", made \($0)" } ?? "") + ")"

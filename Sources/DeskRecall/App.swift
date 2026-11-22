@@ -139,6 +139,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         help.submenu?.addItem(ActionItem("Report a Bug…") { Diagnostics.reportBug() })
         help.submenu?.addItem(ActionItem("Send Feedback…") { Diagnostics.sendFeedback() })
         help.submenu?.addItem(ActionItem("Copy Diagnostics") { [weak self] in self?.copyDiagnostics() })
+        help.submenu?.addItem(.separator())
+        help.submenu?.addItem(ActionItem("Uninstall \(Config.appName)…") { Uninstall.run() })
         menu.addItem(help)
         if Updates.available { menu.addItem(ActionItem("Check for Updates…") { Updates.check() }) }
         menu.addItem(ActionItem("About \(Config.appName)") { [weak self] in self?.show(.about) })
@@ -238,6 +240,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     func rename(_ profile: Profile) {
         guard let name = UI.prompt("Rename profile", "", value: profile.name) else { return }
+        // Names are how the menu and the command line tell profiles apart.
+        guard !profiles.contains(where: { $0.name == name && $0.id != profile.id }) else {
+            _ = UI.confirm("Another profile is already called “\(name)”", "Pick a different name.", cancel: nil)
+            return
+        }
         edit { all in if let i = all.firstIndex(where: { $0.id == profile.id }) { all[i].name = name } }
     }
 
@@ -261,6 +268,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 _ = UI.confirm("Jev key saved, but the test request failed", "\(error)", cancel: nil)
             }
         }
+    }
+
+    func removeJevKey() {
+        guard UI.confirm("Remove the Jev key?", "It is deleted from your login keychain, and nothing is sent to \(Config.jevEndpoint.host ?? "TypeSafe") any more.", ok: "Remove") else { return }
+        if !Jev.remove() { _ = UI.confirm("Couldn't remove the Jev key", "The login keychain refused. Unlock the keychain and try again.", cancel: nil) }
+        refresh()
     }
 
     func setLaunchAtLogin(_ on: Bool) {

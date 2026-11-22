@@ -78,6 +78,13 @@ if args.contains("--selfcheck") {
     precondition(Matching.settle(reopened, floor: 0.2, margin: 0.1).sure == [1: 10, 2: 11], "windows follow their project")
     let twins = Matching.settle([(live: 1, slot: 10, p: 0), (live: 1, slot: 11, p: 0), (live: 2, slot: 10, p: 0), (live: 2, slot: 11, p: 0)], floor: 0.2, margin: 0.1)
     precondition(twins.sure.isEmpty && twins.unsure.count == 2, "nothing to go on: a guess, never a certainty")
+    // Uninstall touches only the app's own files in the user's Library, and keeps the layouts when asked to.
+    let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].path + "/"
+    let keeping = Uninstall.leftovers(keepLayouts: true), everything = Uninstall.leftovers(keepLayouts: false)
+    precondition(everything.count == keeping.count + 1 && !keeping.contains { $0.path.hasPrefix(Config.profilesURL.deletingLastPathComponent().path) },
+                 "the layouts folder goes only when asked")
+    precondition(everything.allSatisfy { $0.path.hasPrefix(library) && ($0.lastPathComponent.hasPrefix(Config.bundleID) || $0.lastPathComponent.hasPrefix(Config.appName)) },
+                 "nothing outside the app's own files")
     print("selfcheck ok")
     exit(0)
 }

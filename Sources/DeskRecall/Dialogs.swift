@@ -18,6 +18,12 @@ enum UI {
         alert(title, message, buttons: [ok] + (cancel.map { [$0] } ?? []))
     }
 
+    /// A confirmation with one checkbox: nil when cancelled, otherwise whether the box was ticked.
+    static func confirm(_ title: String, _ message: String, ok: String, option: String) -> Bool? {
+        let box = NSButton(checkboxWithTitle: option, target: nil, action: nil)
+        return alert(title, message, buttons: [ok, "Cancel"], accessory: box) ? box.state == .on : nil
+    }
+
     static func prompt(_ title: String, _ message: String, value: String = "", secure: Bool = false) -> String? {
         let field: NSTextField = secure ? NSSecureTextField() : NSTextField()
         field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)

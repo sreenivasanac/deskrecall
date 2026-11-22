@@ -2,7 +2,7 @@ import AppKit
 
 /// Pure assignment arithmetic, kept apart so `--selfcheck` can exercise it.
 enum Matching {
-    /// One-to-one pairing of open windows and saved slots from Jev's probabilities, best pairs
+    /// One-to-one pairing of open windows and saved slots (or of displays) from their scores, best pairs
     /// first. Fills as many slots as there are windows; extra windows stay where they are.
     static func assign(_ scored: [(live: Int, slot: Int, p: Double)]) -> [Int: Int] {
         var result: [Int: Int] = [:]
@@ -65,7 +65,7 @@ enum Matching {
 
     /// The group a window is matched within: its app, and for Chromium browsers its profile, which
     /// they put at the end of the title ("Inbox - Google Chrome - Work"). A window never changes profile.
-    /// ponytail: other browsers name the profile elsewhere or not at all; those are left to Jev.
+    /// ponytail: other browsers name the profile elsewhere or not at all; their windows fall through to title scoring.
     static func family(_ bundleID: String, _ appName: String, _ title: String) -> String {
         let profile = title.range(of: " - \(appName) - ", options: .backwards).map { String(title[$0.upperBound...]) }
         return bundleID + "\u{1}" + (profile ?? "")

@@ -44,6 +44,7 @@ struct SettingsPane: View {
                     HStack {
                         Text(app.hasJevKey ? "Saved in your login keychain" : "None").foregroundStyle(.secondary)
                         Button(app.hasJevKey ? "Change…" : "Add…") { app.setJevKey() }
+                        if app.hasJevKey { Button("Remove…") { app.removeJevKey() } }
                         if !app.hasJevKey { Link("Get a key", destination: Config.jevSignup) }
                     }
                 }
@@ -63,6 +64,14 @@ struct SettingsPane: View {
                 } footer: {
                     note("About once a day \(Config.appName) asks \(Config.website.host ?? "its website") whether a newer version exists. Nothing about you or your windows is sent.")
                 }
+            }
+
+            Section {
+                LabeledContent("Remove \(Config.appName) from this Mac") { Button("Uninstall…") { Uninstall.run() } }
+            } header: {
+                Text("Uninstall")
+            } footer: {
+                note("Moves the app to the Trash and removes its settings, cache, launch-at-login entry, Accessibility permission and Jev key. It asks whether your saved layouts go too, or stay for a later reinstall.")
             }
         }
         .formStyle(.grouped)
